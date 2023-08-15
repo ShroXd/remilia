@@ -1,92 +1,60 @@
 package logger
 
 import (
-	"fmt"
-	"os"
-)
+	"log"
 
-type LogLevel int
-
-const (
-	DEBUG LogLevel = iota
-	INFO
-	WARN
-	ERROR
+	"go.uber.org/zap"
 )
 
 type logger struct {
-	fileWriter   *os.File
-	consoleLevel LogLevel
-	fileLevel    LogLevel
+	internal *zap.Logger
 }
 
-func newLogger(consoleLevel, fileLevel LogLevel, logFile string) (*logger, error) {
-	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func newLogger() (*logger, error) {
+	zlogger, err := zap.NewProduction()
 	if err != nil {
 		return nil, err
 	}
 
 	return &logger{
-		fileWriter:   f,
-		consoleLevel: consoleLevel,
-		fileLevel:    fileLevel,
+		internal: zlogger,
 	}, nil
-}
-
-func (l *logger) log(level LogLevel, format string, args ...interface{}) {
-	if level >= l.consoleLevel {
-		fmt.Fprintf(os.Stdout, format, args...)
-	}
-
-	if level >= l.fileLevel {
-		fmt.Fprintf(l.fileWriter, format, args...)
-	}
-}
-
-func (l *logger) debug(format string, args ...interface{}) {
-	l.log(DEBUG, "DEBUG: "+format, args...)
-}
-
-func (l *logger) info(format string, args ...interface{}) {
-	l.log(DEBUG, "INFO: "+format, args...)
-}
-
-func (l *logger) warn(format string, args ...interface{}) {
-	l.log(DEBUG, "WARN: "+format, args...)
-}
-
-func (l *logger) error(format string, args ...interface{}) {
-	l.log(DEBUG, "ERROR: "+format, args...)
-}
-
-func (l *logger) close() error {
-	return l.fileWriter.Close()
 }
 
 var globalLogger *logger
 
-func New(consoleLevel, fileLevel LogLevel, logFile string) error {
+func New() {
 	var err error
-	globalLogger, err = newLogger(consoleLevel, fileLevel, logFile)
-	return err
+	globalLogger, err = newLogger()
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
-func Debug(format string, args ...interface{}) {
-	globalLogger.debug(format, args...)
+func Debug(msg string, fields ...zap.Field) {
+	globalLogger.internal.Debug(msg, fields...)
 }
 
-func Info(format string, args ...interface{}) {
-	globalLogger.info(format, args...)
+func Info(msg string, fields ...zap.Field) {
+	globalLogger.internal.Info(msg, fields...)
 }
 
-func Warn(format string, args ...interface{}) {
-	globalLogger.debug(format, args...)
+func Warn(msg string, fields ...zap.Field) {
+	globalLogger.internal.Warn(msg, fields...)
 }
 
-func Error(format string, args ...interface{}) {
-	globalLogger.debug(format, args...)
+func Error(msg string, fields ...zap.Field) {
+	globalLogger.internal.Error(msg, fields...)
 }
 
-func Close() error {
-	return globalLogger.close()
+func DPanic(msg string, fields ...zap.Field) {
+	globalLogger.internal.DPanic(msg, fields...)
+}
+
+func Panic(msg string, fields ...zap.Field) {
+	globalLogger.internal.Panic(msg, fields...)
+}
+
+func Fatal(msg string, fields ...zap.Field) {
+	globalLogger.internal.Fatal(msg, fields...)
 }
