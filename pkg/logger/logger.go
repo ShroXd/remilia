@@ -3,6 +3,7 @@ package logger
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -23,8 +24,20 @@ func newLogger() (*logger, error) {
 		zapcore.DebugLevel,
 	)
 
+	currDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	logDir := filepath.Join(currDir, "logs")
+	err = os.MkdirAll(logDir, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+
 	// Core for log file
-	file, err := os.Create("logfile.log")
+	logFilePath := filepath.Join(logDir, "logfile.log")
+	file, err := os.Create(logFilePath)
 	if err != nil {
 		return nil, err
 	}
