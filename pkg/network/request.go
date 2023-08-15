@@ -2,8 +2,10 @@ package network
 
 import (
 	"io"
-	"log"
 	"net/http"
+	"remilia/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 type Request struct {
@@ -27,24 +29,24 @@ func New(method, URL string, header *http.Header) (*Request, error) {
 func (r *Request) Visit() string {
 	req, err := http.NewRequest(r.Method, r.URL, nil)
 	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
+		logger.Error("Error creating request", zap.Error(err))
 	}
 
 	req.Header = *r.Header
 
 	resp, err := r.Client.Do(req)
 	if err != nil {
-		log.Fatalf("Error sending request: %v", err)
+		logger.Error("Error sending request", zap.Error(err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Fatalf("Unexpected response status code: %d", resp.StatusCode)
+		logger.Error("Unexpected response status code", zap.Error(err))
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
+		logger.Error("Failed to read response body", zap.Error(err))
 	}
 
 	return string(bodyBytes)
