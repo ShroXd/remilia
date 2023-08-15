@@ -2,8 +2,10 @@ package logger
 
 import (
 	"log"
+	"os"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type logger struct {
@@ -11,10 +13,29 @@ type logger struct {
 }
 
 func newLogger() (*logger, error) {
-	zlogger, err := zap.NewProduction()
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	// Core for stdout
+	consoleCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderConfig),
+		zapcore.AddSync(os.Stdout),
+		zapcore.DebugLevel,
+	)
+
+	// Core for log file
+	file, err := os.Create("logfile.log")
 	if err != nil {
 		return nil, err
 	}
+	fileCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderConfig),
+		zapcore.AddSync(file),
+		zapcore.DebugLevel,
+	)
+
+	core := zapcore.NewTee(consoleCore, fileCore)
+	zlogger := zap.New(core)
 
 	return &logger{
 		internal: zlogger,
