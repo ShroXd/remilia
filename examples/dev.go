@@ -13,17 +13,21 @@ func main() {
 	done := make(chan interface{})
 	defer close(done)
 
-	ch1 := make(chan interface{})
-	ch2 := make(chan interface{})
-	ch3 := make(chan interface{})
+	url := "https://go.dev"
+	num := 50
 
-	go fetchURL("https://go.dev", ch1, done)
-	go fetchURL("https://go.dev", ch2, done)
-	go fetchURL("https://go.dev", ch3, done)
+	channels := make([]<-chan interface{}, num)
 
-	result := concurrency.FanIn(done, ch1, ch2, ch3)
+	for i := 0; i < num; i++ {
+		ch := make(chan interface{})
+		channels[i] = ch
 
-	for i := 0; i < 3; i++ {
+		go fetchURL(url, ch, done)
+	}
+
+	result := concurrency.FanIn(done, channels...)
+
+	for i := 0; i < num; i++ {
 		htmlContent := <-result
 		fmt.Println("Received html content: ", htmlContent)
 	}
