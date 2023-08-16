@@ -2,168 +2,51 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
-	"runtime"
-	"sync"
-	"time"
+	"net/http"
+	"remilia/pkg/concurrency"
+	"remilia/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 func main() {
 	done := make(chan interface{})
 	defer close(done)
 
-	start := time.Now()
-	randIntStream := toInt(done, repeatFn(done, random))
-	fmt.Println("Primes: ")
+	ch1 := make(chan interface{})
+	ch2 := make(chan interface{})
+	ch3 := make(chan interface{})
 
-	numFinders := runtime.NumCPU()
-	fmt.Printf("Spinning up %d prime finders.\n", numFinders)
-	finders := make([]<-chan int, numFinders)
+	go fetchURL("https://go.dev", ch1, done)
+	go fetchURL("https://go.dev", ch2, done)
+	go fetchURL("https://go.dev", ch3, done)
 
-	fmt.Println("Primes: ")
-	for i := 0; i < numFinders; i++ {
-		finders[i] = primeFinder(done, randIntStream)
+	result := concurrency.FanIn(done, ch1, ch2, ch3)
+
+	for i := 0; i < 3; i++ {
+		htmlContent := <-result
+		fmt.Println("Received html content: ", htmlContent)
 	}
+}
 
-	for prime := range take(done, fanIn(done, finders...), 10) {
-		fmt.Printf("\t%d\n", prime)
+func fetchURL(url string, out chan<- interface{}, done <-chan interface{}) {
+	resp, err := http.Get(url)
+	if err != nil {
+		logger.Error("Request error", zap.Error(err))
+		return
 	}
+	defer resp.Body.Close()
 
-	fmt.Printf("Search took: %v", time.Since(start))
-}
+	// bodyBytes, err := io.ReadAll(resp.Body)
+	//if err != nil {
+	//	logger.Error("Failed to read response body", zap.Error(err))
+	//}
+	// out <- string(bodyBytes)
+	out <- resp.StatusCode
 
-func random() interface{} {
-	return rand.Intn(5000000000000000000)
-}
-
-func repeatFn(
-	done <-chan interface{},
-	fn func() interface{},
-) <-chan interface{} {
-	valueStream := make(chan interface{})
-
-	go func() {
-		defer close(valueStream)
-
-		for {
-			select {
-			case <-done:
-				return
-			case valueStream <- fn():
-			}
-		}
-	}()
-
-	return valueStream
-}
-
-func toInt(
-	done <-chan interface{},
-	valueStream <-chan interface{},
-) <-chan int {
-	intStream := make(chan int)
-
-	go func() {
-		defer close(intStream)
-
-		for v := range valueStream {
-			select {
-			case <-done:
-				return
-			case intStream <- v.(int):
-			}
-		}
-	}()
-
-	return intStream
-}
-
-func take(
-	done <-chan interface{},
-	valueStream <-chan int,
-	num int,
-) <-chan interface{} {
-	takeStream := make(chan interface{})
-
-	go func() {
-		defer close(takeStream)
-
-		for i := 0; i < num; i++ {
-			select {
-			case <-done:
-				return
-			case takeStream <- <-valueStream:
-			}
-		}
-	}()
-
-	return takeStream
-}
-
-func isPrime(num int) bool {
-	if num <= 1 {
-		return false
+	select {
+	case <-done:
+		return
+	default:
 	}
-
-	for i := 2; i*i <= num; i++ {
-		if num%i == 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func primeFinder(
-	done <-chan interface{},
-	intStream <-chan int,
-) <-chan int {
-	primeStream := make(chan int)
-
-	go func() {
-		defer close(primeStream)
-
-		for v := range intStream {
-			if isPrime(v) {
-				select {
-				case <-done:
-					return
-				case primeStream <- v:
-				}
-			}
-		}
-	}()
-
-	return primeStream
-}
-
-func fanIn(
-	done <-chan interface{},
-	channels ...<-chan int,
-) <-chan int {
-	var wg sync.WaitGroup
-	multiplexedStream := make(chan int)
-
-	multiplex := func(c <-chan int) {
-		defer wg.Done()
-		for i := range c {
-			select {
-			case <-done:
-				return
-			case multiplexedStream <- i:
-			}
-		}
-	}
-
-	wg.Add(len(channels))
-	for _, c := range channels {
-		go multiplex(c)
-	}
-
-	go func() {
-		wg.Wait()
-		close(multiplexedStream)
-	}()
-
-	return multiplexedStream
 }
