@@ -1,2 +1,2 @@
 start:
-	cd _examples && go run dev.go
+	cd examples && go run dev.go
