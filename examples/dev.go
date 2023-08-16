@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -13,7 +15,17 @@ func main() {
 	start := time.Now()
 	randIntStream := toInt(done, repeatFn(done, random))
 	fmt.Println("Primes: ")
-	for prime := range take(done, primeFinder(done, randIntStream), 10) {
+
+	numFinders := runtime.NumCPU()
+	fmt.Printf("Spinning up %d prime finders.\n", numFinders)
+	finders := make([]<-chan int, numFinders)
+
+	fmt.Println("Primes: ")
+	for i := 0; i < numFinders; i++ {
+		finders[i] = primeFinder(done, randIntStream)
+	}
+
+	for prime := range take(done, fanIn(done, finders...), 10) {
 		fmt.Printf("\t%d\n", prime)
 	}
 
@@ -123,4 +135,35 @@ func primeFinder(
 	}()
 
 	return primeStream
+}
+
+func fanIn(
+	done <-chan interface{},
+	channels ...<-chan int,
+) <-chan int {
+	var wg sync.WaitGroup
+	multiplexedStream := make(chan int)
+
+	multiplex := func(c <-chan int) {
+		defer wg.Done()
+		for i := range c {
+			select {
+			case <-done:
+				return
+			case multiplexedStream <- i:
+			}
+		}
+	}
+
+	wg.Add(len(channels))
+	for _, c := range channels {
+		go multiplex(c)
+	}
+
+	go func() {
+		wg.Wait()
+		close(multiplexedStream)
+	}()
+
+	return multiplexedStream
 }
