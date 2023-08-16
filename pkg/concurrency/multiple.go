@@ -33,3 +33,46 @@ func FanIn(
 
 	return output
 }
+
+func FanOut[T any, U any](
+	done <-chan interface{},
+	input <-chan T,
+	workerCount int,
+	processFn func(T) U,
+) <-chan U {
+	var wg sync.WaitGroup
+	output := make(chan U)
+
+	worker := func() {
+		defer wg.Done()
+
+		for {
+			select {
+			case value, ok := <-input:
+				if !ok {
+					return
+				}
+				processedValue := processFn(value)
+				select {
+				case output <- processedValue:
+				case <-done:
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}
+
+	wg.Add(workerCount)
+	for i := 0; i < workerCount; i++ {
+		go worker()
+	}
+
+	go func() {
+		wg.Wait()
+		close(output)
+	}()
+
+	return output
+}
