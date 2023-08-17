@@ -10,7 +10,7 @@ func TestFanIn(t *testing.T) {
 		ch <- "test"
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		out := FanIn(done, ch)
@@ -29,7 +29,7 @@ func TestFanIn(t *testing.T) {
 			channels[i] = ch
 		}
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		out := FanIn(done, channels...)
@@ -39,10 +39,10 @@ func TestFanIn(t *testing.T) {
 	})
 
 	t.Run("no channel", func(t *testing.T) {
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
-		out := FanIn(done)
+		out := FanIn[any](done)
 		_, open := <-out
 		if open {
 			t.Fatalf("expected output channel to be closed")
@@ -55,7 +55,7 @@ func TestFanIn(t *testing.T) {
 		close(ch1)
 
 		ch2 := make(chan interface{})
-		done := make(chan interface{})
+		done := make(chan struct{})
 
 		out := FanIn(done, ch1, ch2)
 
@@ -79,7 +79,7 @@ func TestFanOut(t *testing.T) {
 		ch <- "test"
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		processer := func(input string) string { return input }
@@ -96,7 +96,7 @@ func TestFanOut(t *testing.T) {
 		ch <- "test"
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		processer := func(input string) string { return input }
@@ -116,7 +116,7 @@ func TestFanOut(t *testing.T) {
 		ch <- "test"
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		processer := func(input string) string { return input }
@@ -136,7 +136,7 @@ func TestFanOut(t *testing.T) {
 		ch <- "test"
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		processer := func(input string) string { return input }
@@ -153,7 +153,7 @@ func TestFanOut(t *testing.T) {
 		ch <- 1
 		close(ch)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		defer close(done)
 
 		processer := func(input int) int { return input * 2 }
@@ -172,7 +172,7 @@ func TestFanOut(t *testing.T) {
 		}
 		close(input)
 
-		done := make(chan interface{})
+		done := make(chan struct{})
 		output := FanOut(done, input, 3, func(i int) int {
 			return i * 2
 		})

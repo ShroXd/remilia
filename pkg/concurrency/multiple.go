@@ -2,14 +2,14 @@ package concurrency
 
 import "sync"
 
-func FanIn(
-	done <-chan interface{},
-	channels ...<-chan interface{},
-) <-chan interface{} {
+func FanIn[T any](
+	done <-chan struct{},
+	channels ...<-chan T,
+) <-chan T {
 	var wg sync.WaitGroup
-	output := make(chan interface{})
+	output := make(chan T)
 
-	multiplex := func(ch <-chan interface{}) {
+	multiplex := func(ch <-chan T) {
 		defer wg.Done()
 
 		for i := range ch {
@@ -35,7 +35,7 @@ func FanIn(
 }
 
 func FanOut[T any, U any](
-	done <-chan interface{},
+	done <-chan struct{},
 	input <-chan T,
 	workerCount int,
 	processFn func(T) U,

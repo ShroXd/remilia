@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	done := make(chan interface{})
+	done := make(chan struct{})
 	defer close(done)
 
 	url := "https://go.dev"
@@ -33,7 +33,7 @@ func main() {
 	}
 }
 
-func fetchURL(url string, out chan<- interface{}, done <-chan interface{}) {
+func fetchURL(url string, out chan<- interface{}, done <-chan struct{}) {
 	resp, err := http.Get(url)
 	if err != nil {
 		logger.Error("Request error", zap.Error(err))
