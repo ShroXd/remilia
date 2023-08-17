@@ -1,6 +1,10 @@
+.PHONY: start test benchmark
+
 start:
 	cd examples && go run dev.go
 
-.PHONY: test
 test:
 	@go test -cover ./...
+
+benchmark:
+	@go test ./... -bench . 
