@@ -1,6 +1,10 @@
 package concurrency
 
-import "sync"
+import (
+	"sync"
+)
+
+// TODO: add timeout for each function in select statement
 
 func FanIn[T any](
 	done <-chan struct{},
