@@ -163,4 +163,33 @@ func TestFanOut(t *testing.T) {
 			t.Fatalf("excepted 2, got %d", got)
 		}
 	})
+
+	t.Run("done channel", func(t *testing.T) {
+		// Test data
+		input := make(chan int, 5)
+		for i := 0; i < 5; i++ {
+			input <- i
+		}
+		close(input)
+
+		done := make(chan interface{})
+		output := FanOut(done, input, 3, func(i int) int {
+			return i * 2
+		})
+
+		// Close done
+		close(done)
+
+		// Collect output values until the output channel is closed
+		processedValues := []int{}
+		for val := range output {
+			processedValues = append(processedValues, val)
+		}
+
+		// Since we closed the `done` channel prematurely,
+		// we should have processed fewer items than the input.
+		if len(processedValues) >= 5 {
+			t.Errorf("Expected fewer processed values than input due to done channel being closed, but got %d", len(processedValues))
+		}
+	})
 }
