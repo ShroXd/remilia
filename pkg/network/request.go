@@ -7,9 +7,10 @@ import (
 
 type Request struct {
 	internal *http.Request
+	Host     string
 }
 
-func New(method, url string, body io.Reader) (*Request, error) {
+func NewRequest(method, url string, body io.Reader) (*Request, error) {
 	r, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -17,5 +18,6 @@ func New(method, url string, body io.Reader) (*Request, error) {
 
 	return &Request{
 		internal: r,
+		Host:     r.Host,
 	}, nil
 }
