@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// TODO: add the scraper name to the log
 type logger struct {
 	internal *zap.Logger
 }

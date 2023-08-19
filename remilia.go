@@ -1,8 +1,12 @@
 package remilia
 
 import (
+	"net/http"
+	"remilia/pkg/logger"
 	"remilia/pkg/network"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Remilia struct {
@@ -13,7 +17,7 @@ type Remilia struct {
 	AllowedDomains []string
 	UserAgent      string
 
-	client network.Client
+	client *network.Client
 }
 
 type Option interface {
@@ -31,6 +35,8 @@ func New(name string, options ...Option) *Remilia {
 		Name: name,
 	}
 
+	r.Init()
+
 	return r.WithOptions(options...)
 }
 
@@ -41,6 +47,26 @@ func (r *Remilia) WithOptions(opts ...Option) *Remilia {
 		opt.apply(c)
 	}
 	return c
+}
+
+// Init setup private deps
+func (r *Remilia) Init() {
+	r.client = network.NewClient()
+}
+
+// Do starts web collecting work via sending a request
+func (r *Remilia) Do(request *network.Request) *http.Response {
+	req, err := request.Build()
+	if err != nil {
+		logger.Error("Failed to build request", zap.Error(err))
+	}
+
+	resp, err := r.client.Visit(req)
+	if err != nil {
+		logger.Error("Failed to send request", zap.Error(err))
+	}
+
+	return resp
 }
 
 // clone function returns a shallow copy of Remilia object

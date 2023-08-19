@@ -2,14 +2,37 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"remilia"
 	"remilia/pkg/concurrency"
 	"remilia/pkg/logger"
+	"remilia/pkg/network"
 
 	"go.uber.org/zap"
 )
 
 func main() {
+	scraper := remilia.New("My first scraper")
+
+	request, err := network.NewRequest("GET", "https://go.dev")
+	if err != nil {
+		log.Print("Error during building request")
+	}
+
+	resp := scraper.Do(request)
+	defer resp.Body.Close()
+
+	htmlData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Print("Error during reading response: ", err)
+	}
+
+	fmt.Println(string(htmlData))
+}
+
+func test() {
 	done := make(chan struct{})
 	defer close(done)
 
