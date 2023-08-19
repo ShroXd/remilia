@@ -11,6 +11,7 @@ type Remilia struct {
 	// Limit rules
 	Delay          time.Duration
 	AllowedDomains []string
+	UserAgent      string
 
 	client network.Client
 }
@@ -59,5 +60,12 @@ func AllowedDomains(domains ...string) Option {
 func Delay(delay time.Duration) Option {
 	return optionFunc(func(r *Remilia) {
 		r.Delay = delay
+	})
+}
+
+// UserAgent sets user agent used by request
+func UserAgent(ua string) Option {
+	return optionFunc(func(r *Remilia) {
+		r.UserAgent = ua
 	})
 }

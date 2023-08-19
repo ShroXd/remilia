@@ -59,3 +59,12 @@ func TestDelay(t *testing.T) {
 		t.Errorf("Expected Delay: %v, got: %v", time.Second, r.Delay)
 	}
 }
+
+func TestUserAgent(t *testing.T) {
+	fakeUserAgent := "Mozilla/5.0 (FakeOS; TestingEnvironment; NOT-REAL-BROWSER) Gecko/20100101 FakeBrowser/0.0.1 FOR-TESTING-PURPOSES-ONLY"
+	r := New("Test").WithOptions(UserAgent(fakeUserAgent))
+
+	if r.UserAgent != fakeUserAgent {
+		t.Errorf("Expected UserAgent: %v, got: %v", fakeUserAgent, r.UserAgent)
+	}
+}
