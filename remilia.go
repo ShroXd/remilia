@@ -1,6 +1,9 @@
 package remilia
 
 import (
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"remilia/pkg/logger"
 	"remilia/pkg/network"
@@ -10,6 +13,7 @@ import (
 )
 
 type Remilia struct {
+	URL  string
 	Name string
 
 	// Limit rules
@@ -30,9 +34,9 @@ func (f optionFunc) apply(r *Remilia) {
 	f(r)
 }
 
-func New(name string, options ...Option) *Remilia {
+func New(url string, options ...Option) *Remilia {
 	r := &Remilia{
-		Name: name,
+		URL: url,
 	}
 
 	r.Init()
@@ -54,8 +58,28 @@ func (r *Remilia) Init() {
 	r.client = network.NewClient()
 }
 
-// Do starts web collecting work via sending a request
-func (r *Remilia) Do(request *network.Request) *http.Response {
+// Start starts web collecting work via sending a request
+func (r *Remilia) Start() error {
+	req, err := network.NewRequest("GET", r.URL)
+	if err != nil {
+		return err
+	}
+
+	// TODO: add response to channel for parers
+	resp := r.do(req)
+	defer resp.Body.Close()
+
+	htmlData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Print("Error during reading response: ", err)
+	}
+
+	fmt.Println(string(htmlData))
+
+	return nil
+}
+
+func (r *Remilia) do(request *network.Request) *http.Response {
 	req, err := request.Build()
 	if err != nil {
 		logger.Error("Failed to build request", zap.Error(err))
@@ -73,6 +97,13 @@ func (r *Remilia) Do(request *network.Request) *http.Response {
 func (r *Remilia) clone() *Remilia {
 	copy := *r
 	return &copy
+}
+
+// Name set name for scraper
+func Name(name string) Option {
+	return optionFunc(func(r *Remilia) {
+		r.Name = name
+	})
 }
 
 // AllowedDomains sets a string list that specifies the domains accessible to the web scraper for crawling

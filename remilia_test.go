@@ -6,16 +6,16 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	name := "Test"
-	r := New(name)
+	url := "www.test.com"
+	r := New(url)
 
-	if r.Name != name {
-		t.Errorf("Expected name: %v, got: %v", name, r.Name)
+	if r.URL != url {
+		t.Errorf("Expected url: %v, got: %v", url, r.URL)
 	}
 }
 
 func TestWithOptions(t *testing.T) {
-	r := New("Test")
+	r := New("www.test.com")
 	r2 := r.WithOptions(Delay(time.Second), AllowedDomains("test.com"))
 
 	if r == r2 {
@@ -32,7 +32,7 @@ func TestWithOptions(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	r := New("Test")
+	r := New("www.test.com")
 	r2 := r.clone()
 
 	if r == r2 {
@@ -44,8 +44,16 @@ func TestClone(t *testing.T) {
 	}
 }
 
+func TestName(t *testing.T) {
+	r := New("www.test.com").WithOptions(Name("test"))
+
+	if r.Name != "test" {
+		t.Errorf("Expected Name: 'test', got %v", r.Name)
+	}
+}
+
 func TestAllowedDomains(t *testing.T) {
-	r := New("Test").WithOptions(AllowedDomains("test.com"))
+	r := New("www.test.com").WithOptions(AllowedDomains("test.com"))
 
 	if len(r.AllowedDomains) != 1 || r.AllowedDomains[0] != "test.com" {
 		t.Errorf("Expected AllowedDomains: ['test.com'], got %v", r.AllowedDomains)
@@ -53,7 +61,7 @@ func TestAllowedDomains(t *testing.T) {
 }
 
 func TestDelay(t *testing.T) {
-	r := New("Test").WithOptions(Delay(time.Second))
+	r := New("www.test.com").WithOptions(Delay(time.Second))
 
 	if r.Delay != time.Second {
 		t.Errorf("Expected Delay: %v, got: %v", time.Second, r.Delay)
