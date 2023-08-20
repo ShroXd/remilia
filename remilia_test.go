@@ -44,6 +44,14 @@ func TestClone(t *testing.T) {
 	}
 }
 
+func TestConcurrentNumber(t *testing.T) {
+	r := New("www.test.com").WithOptions(ConcurrentNumber(20))
+
+	if r.ConcurrentNumber != 20 {
+		t.Errorf("Expected ConcurrentNumber: 20, got %v", r.ConcurrentNumber)
+	}
+}
+
 func TestName(t *testing.T) {
 	r := New("www.test.com").WithOptions(Name("test"))
 

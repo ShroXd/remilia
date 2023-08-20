@@ -2,9 +2,8 @@ package remilia
 
 import (
 	"fmt"
-	"io"
-	"log"
 	"net/http"
+	"remilia/pkg/concurrency"
 	"remilia/pkg/logger"
 	"remilia/pkg/network"
 	"time"
@@ -13,8 +12,9 @@ import (
 )
 
 type Remilia struct {
-	URL  string
-	Name string
+	URL              string
+	Name             string
+	ConcurrentNumber int
 
 	// Limit rules
 	Delay          time.Duration
@@ -36,7 +36,8 @@ func (f optionFunc) apply(r *Remilia) {
 
 func New(url string, options ...Option) *Remilia {
 	r := &Remilia{
-		URL: url,
+		URL:              url,
+		ConcurrentNumber: 10,
 	}
 
 	r.Init()
@@ -60,21 +61,41 @@ func (r *Remilia) Init() {
 
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
-	req, err := network.NewRequest("GET", r.URL)
-	if err != nil {
-		return err
+	fetchURL := func(url string, out chan<- interface{}, done <-chan struct{}) {
+		resp, err := http.Get(url)
+		if err != nil {
+			logger.Error("Request error", zap.Error(err))
+			return
+		}
+		defer resp.Body.Close()
+
+		out <- resp.StatusCode
+
+		select {
+		case <-done:
+			return
+		default:
+		}
 	}
 
-	// TODO: add response to channel for parers
-	resp := r.do(req)
-	defer resp.Body.Close()
+	done := make(chan struct{})
+	defer close(done)
 
-	htmlData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Print("Error during reading response: ", err)
+	channels := make([]<-chan interface{}, r.ConcurrentNumber)
+
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		ch := make(chan interface{})
+		channels[i] = ch
+
+		go fetchURL(r.URL, ch, done)
 	}
 
-	fmt.Println(string(htmlData))
+	result := concurrency.FanIn(done, channels...)
+
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		htmlContent := <-result
+		fmt.Println("Received request code: ", htmlContent)
+	}
 
 	return nil
 }
@@ -97,6 +118,13 @@ func (r *Remilia) do(request *network.Request) *http.Response {
 func (r *Remilia) clone() *Remilia {
 	copy := *r
 	return &copy
+}
+
+// ConcurrentNumber set number of goroutines for network request
+func ConcurrentNumber(num int) Option {
+	return optionFunc(func(r *Remilia) {
+		r.ConcurrentNumber = num
+	})
 }
 
 // Name set name for scraper
