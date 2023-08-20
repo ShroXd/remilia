@@ -2,6 +2,7 @@ package remilia
 
 import (
 	"net/http"
+	"net/url"
 	"remilia/pkg/concurrency"
 	"remilia/pkg/logger"
 	"remilia/pkg/network"
@@ -22,13 +23,20 @@ type Remilia struct {
 	UserAgent      string
 
 	client        *network.Client
-	parseCallback []*ParseCallbackContainer
+	parseCallback *ParseCallbackContainer
+	pipeline      []*PipelineContainer
 }
 
 type (
 	ParseCallback          func(node string)
+	PipelineFn             func(node string) *url.URL
 	ParseCallbackContainer struct {
 		Fn       ParseCallback
+		Selector string
+	}
+
+	PipelineContainer struct {
+		Fn       PipelineFn
 		Selector string
 	}
 )
@@ -99,6 +107,34 @@ func (r *Remilia) clone() *Remilia {
 	return &copy
 }
 
+// TODO: push result url into url pool
+func (r *Remilia) pipelineController(callback PipelineFn) chan *url.URL {
+	done := make(chan struct{})
+	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
+
+	output := make(chan *url.URL)
+	defer close(output)
+
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		ch := make(chan *goquery.Document)
+		channels[i] = ch
+
+		go r.visit(done, r.URL, ch, r.responseParser)
+	}
+
+	result := concurrency.FanIn(done, channels...)
+
+	for doc := range result {
+		text := doc.Find(r.parseCallback.Selector).Text()
+		output <- callback(text)
+	}
+
+	return output
+}
+
+// TODO: call callback use parsing result
+func (r *Remilia) consumerController() {}
+
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
 	done := make(chan struct{})
@@ -114,8 +150,8 @@ func (r *Remilia) Start() error {
 	result := concurrency.FanIn(done, channels...)
 
 	for doc := range result {
-		text := doc.Find(r.parseCallback[0].Selector).Text()
-		r.parseCallback[0].Fn(text)
+		text := doc.Find(r.parseCallback.Selector).Text()
+		r.parseCallback.Fn(text)
 	}
 
 	return nil
@@ -127,12 +163,22 @@ func (r *Remilia) Parse(selector string, fn ParseCallback) {
 		Fn:       fn,
 	}
 
-	if r.parseCallback == nil {
-		r.parseCallback = []*ParseCallbackContainer{container}
-	} else {
-		r.parseCallback = append(r.parseCallback, container)
-	}
+	r.parseCallback = container
 }
 
-// func (r *Remilia) URLPipeline(select string, generator func(node string) -> ) {
-//}
+// TODO: make the return value can only call pipeline
+// TODO: check the result of callback, if it's a URL, use it in the pipeline
+func (r *Remilia) URLPipeline(selector string, generator PipelineFn) *Remilia {
+	container := &PipelineContainer{
+		Selector: selector,
+		Fn:       generator,
+	}
+
+	if r.pipeline == nil {
+		r.pipeline = []*PipelineContainer{container}
+	} else {
+		r.pipeline = append(r.pipeline, container)
+	}
+
+	return r
+}
