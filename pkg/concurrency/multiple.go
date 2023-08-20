@@ -69,6 +69,7 @@ func FanOut[T any, U any](
 	}
 
 	wg.Add(workerCount)
+
 	for i := 0; i < workerCount; i++ {
 		go worker()
 	}

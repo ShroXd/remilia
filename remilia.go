@@ -5,7 +5,6 @@ import (
 	"remilia/pkg/concurrency"
 	"remilia/pkg/logger"
 	"remilia/pkg/network"
-	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -102,11 +101,7 @@ func (r *Remilia) clone() *Remilia {
 
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
-	var wg sync.WaitGroup
-
 	done := make(chan struct{})
-	defer close(done)
-
 	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
 
 	for i := 0; i < r.ConcurrentNumber; i++ {
@@ -118,20 +113,10 @@ func (r *Remilia) Start() error {
 
 	result := concurrency.FanIn(done, channels...)
 
-	// call all callback for each result from request
-	wg.Add(len(r.parseCallback) * r.ConcurrentNumber)
 	for doc := range result {
-		for _, cb := range r.parseCallback {
-			go func(document *goquery.Document, container *ParseCallbackContainer) {
-				container.Fn(document.Find(container.Selector).Text())
-				defer wg.Done()
-			}(doc, cb)
-		}
+		text := doc.Find(r.parseCallback[0].Selector).Text()
+		r.parseCallback[0].Fn(text)
 	}
-
-	go func() {
-		wg.Wait()
-	}()
 
 	return nil
 }
@@ -148,3 +133,6 @@ func (r *Remilia) Parse(selector string, fn ParseCallback) {
 		r.parseCallback = append(r.parseCallback, container)
 	}
 }
+
+// func (r *Remilia) URLPipeline(select string, generator func(node string) -> ) {
+//}
