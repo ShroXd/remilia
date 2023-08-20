@@ -8,6 +8,7 @@ import (
 	"remilia/pkg/network"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
 )
 
@@ -62,8 +63,8 @@ func (r *Remilia) init() {
 func (r *Remilia) visit(
 	done <-chan struct{},
 	url string,
-	out chan<- interface{},
-	bodyParser func(resp *http.Response) interface{},
+	out chan<- *goquery.Document,
+	bodyParser func(resp *http.Response) *goquery.Document,
 ) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -81,8 +82,13 @@ func (r *Remilia) visit(
 	}
 }
 
-func (r *Remilia) responseParser(resp *http.Response) interface{} {
-	return resp.StatusCode
+func (r *Remilia) responseParser(resp *http.Response) *goquery.Document {
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		logger.Error("Failed to parse html", zap.Error(err))
+	}
+
+	return doc
 }
 
 func (r *Remilia) do(request *network.Request) *http.Response {
@@ -110,10 +116,10 @@ func (r *Remilia) Start() error {
 	done := make(chan struct{})
 	defer close(done)
 
-	channels := make([]<-chan interface{}, r.ConcurrentNumber)
+	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
 
 	for i := 0; i < r.ConcurrentNumber; i++ {
-		ch := make(chan interface{})
+		ch := make(chan *goquery.Document)
 		channels[i] = ch
 
 		go r.visit(done, r.URL, ch, r.responseParser)
@@ -121,9 +127,14 @@ func (r *Remilia) Start() error {
 
 	result := concurrency.FanIn(done, channels...)
 
+	testParser := func(d *goquery.Document) string {
+		res := d.Find("h1").Text()
+		return res
+	}
+
 	for i := 0; i < r.ConcurrentNumber; i++ {
 		htmlContent := <-result
-		fmt.Println("Received request code: ", htmlContent)
+		fmt.Println("Received request code: ", testParser(htmlContent))
 	}
 
 	return nil
