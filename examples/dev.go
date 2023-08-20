@@ -14,6 +14,10 @@ import (
 func main() {
 	scraper := remilia.New("https://go.dev", remilia.ConcurrentNumber(5))
 
+	scraper.Parse("h1", func(r string) {
+		fmt.Println("Parse result: ", r)
+	})
+
 	err := scraper.Start()
 	if err != nil {
 		log.Print(err)

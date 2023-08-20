@@ -1,11 +1,11 @@
 package remilia
 
 import (
-	"fmt"
 	"net/http"
 	"remilia/pkg/concurrency"
 	"remilia/pkg/logger"
 	"remilia/pkg/network"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -22,8 +22,17 @@ type Remilia struct {
 	AllowedDomains []string
 	UserAgent      string
 
-	client *network.Client
+	client        *network.Client
+	parseCallback []*ParseCallbackContainer
 }
+
+type (
+	ParseCallback          func(node string)
+	ParseCallbackContainer struct {
+		Fn       ParseCallback
+		Selector string
+	}
+)
 
 func New(url string, options ...Option) *Remilia {
 	r := &Remilia{
@@ -63,7 +72,11 @@ func (r *Remilia) visit(
 	}
 	defer resp.Body.Close()
 
+	// visit function is the writer of out channel
+	// thus it has responsiblity to close the channel
+	// TODO: encapsulate the channels creating and close in a single function
 	out <- bodyParser(resp)
+	defer close(out)
 
 	select {
 	case <-done:
@@ -81,20 +94,6 @@ func (r *Remilia) responseParser(resp *http.Response) *goquery.Document {
 	return doc
 }
 
-func (r *Remilia) do(request *network.Request) *http.Response {
-	req, err := request.Build()
-	if err != nil {
-		logger.Error("Failed to build request", zap.Error(err))
-	}
-
-	resp, err := r.client.Visit(req)
-	if err != nil {
-		logger.Error("Failed to send request", zap.Error(err))
-	}
-
-	return resp
-}
-
 // clone function returns a shallow copy of Remilia object
 func (r *Remilia) clone() *Remilia {
 	copy := *r
@@ -103,6 +102,8 @@ func (r *Remilia) clone() *Remilia {
 
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
+	var wg sync.WaitGroup
+
 	done := make(chan struct{})
 	defer close(done)
 
@@ -117,15 +118,33 @@ func (r *Remilia) Start() error {
 
 	result := concurrency.FanIn(done, channels...)
 
-	testParser := func(d *goquery.Document) string {
-		res := d.Find("h1").Text()
-		return res
+	// call all callback for each result from request
+	wg.Add(len(r.parseCallback) * r.ConcurrentNumber)
+	for doc := range result {
+		for _, cb := range r.parseCallback {
+			go func(document *goquery.Document, container *ParseCallbackContainer) {
+				container.Fn(document.Find(container.Selector).Text())
+				defer wg.Done()
+			}(doc, cb)
+		}
 	}
 
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		htmlContent := <-result
-		fmt.Println("Received request code: ", testParser(htmlContent))
-	}
+	go func() {
+		wg.Wait()
+	}()
 
 	return nil
+}
+
+func (r *Remilia) Parse(selector string, fn ParseCallback) {
+	container := &ParseCallbackContainer{
+		Selector: selector,
+		Fn:       fn,
+	}
+
+	if r.parseCallback == nil {
+		r.parseCallback = []*ParseCallbackContainer{container}
+	} else {
+		r.parseCallback = append(r.parseCallback, container)
+	}
 }
