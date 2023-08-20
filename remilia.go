@@ -40,13 +40,13 @@ func New(url string, options ...Option) *Remilia {
 		ConcurrentNumber: 10,
 	}
 
-	r.Init()
+	r.init()
 
-	return r.WithOptions(options...)
+	return r.withOptions(options...)
 }
 
-// WithOptions apply options to the shallow copy of current Remilia
-func (r *Remilia) WithOptions(opts ...Option) *Remilia {
+// withOptions apply options to the shallow copy of current Remilia
+func (r *Remilia) withOptions(opts ...Option) *Remilia {
 	c := r.clone()
 	for _, opt := range opts {
 		opt.apply(c)
@@ -54,50 +54,35 @@ func (r *Remilia) WithOptions(opts ...Option) *Remilia {
 	return c
 }
 
-// Init setup private deps
-func (r *Remilia) Init() {
+// init setup private deps
+func (r *Remilia) init() {
 	r.client = network.NewClient()
 }
 
-// Start starts web collecting work via sending a request
-func (r *Remilia) Start() error {
-	fetchURL := func(url string, out chan<- interface{}, done <-chan struct{}) {
-		resp, err := http.Get(url)
-		if err != nil {
-			logger.Error("Request error", zap.Error(err))
-			return
-		}
-		defer resp.Body.Close()
-
-		out <- resp.StatusCode
-
-		select {
-		case <-done:
-			return
-		default:
-		}
+func (r *Remilia) visit(
+	done <-chan struct{},
+	url string,
+	out chan<- interface{},
+	bodyParser func(resp *http.Response) interface{},
+) {
+	resp, err := http.Get(url)
+	if err != nil {
+		logger.Error("Request error", zap.Error(err))
+		return
 	}
+	defer resp.Body.Close()
 
-	done := make(chan struct{})
-	defer close(done)
+	out <- bodyParser(resp)
 
-	channels := make([]<-chan interface{}, r.ConcurrentNumber)
-
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		ch := make(chan interface{})
-		channels[i] = ch
-
-		go fetchURL(r.URL, ch, done)
+	select {
+	case <-done:
+		return
+	default:
 	}
+}
 
-	result := concurrency.FanIn(done, channels...)
-
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		htmlContent := <-result
-		fmt.Println("Received request code: ", htmlContent)
-	}
-
-	return nil
+func (r *Remilia) responseParser(resp *http.Response) interface{} {
+	return resp.StatusCode
 }
 
 func (r *Remilia) do(request *network.Request) *http.Response {
@@ -118,6 +103,30 @@ func (r *Remilia) do(request *network.Request) *http.Response {
 func (r *Remilia) clone() *Remilia {
 	copy := *r
 	return &copy
+}
+
+// Start starts web collecting work via sending a request
+func (r *Remilia) Start() error {
+	done := make(chan struct{})
+	defer close(done)
+
+	channels := make([]<-chan interface{}, r.ConcurrentNumber)
+
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		ch := make(chan interface{})
+		channels[i] = ch
+
+		go r.visit(done, r.URL, ch, r.responseParser)
+	}
+
+	result := concurrency.FanIn(done, channels...)
+
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		htmlContent := <-result
+		fmt.Println("Received request code: ", htmlContent)
+	}
+
+	return nil
 }
 
 // ConcurrentNumber set number of goroutines for network request

@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	scraper := remilia.New("https://go.dev", remilia.ConcurrentNumber(1000))
+	scraper := remilia.New("https://go.dev", remilia.ConcurrentNumber(5))
 
 	err := scraper.Start()
 	if err != nil {
