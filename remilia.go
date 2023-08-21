@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"remilia/pkg/concurrency"
@@ -107,29 +108,41 @@ func (r *Remilia) clone() *Remilia {
 	return &copy
 }
 
-// TODO: push result url into url pool
-func (r *Remilia) pipelineController(callback PipelineFn) chan *url.URL {
+func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
+	fmt.Println("Visiting: ", url)
+	resp, err := http.Get(url.String())
+	if err != nil {
+		logger.Error("Request error", zap.Error(err))
+		// TODO: pass error to caller
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		logger.Error("Error during pass response", zap.Error(err))
+	}
+
+	return doc
+}
+
+func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, callback func(d *goquery.Document) *url.URL) {
+	fmt.Println("TEST PIPELINE")
 	done := make(chan struct{})
-	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
 
-	output := make(chan *url.URL)
-	defer close(output)
+	output := concurrency.FanOut(
+		done,
+		input,
+		r.ConcurrentNumber,
+		r.simpleVisit,
+	)
 
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		ch := make(chan *goquery.Document)
-		channels[i] = ch
-
-		go r.visit(done, r.URL, ch, r.responseParser)
+	for doc := range output {
+		doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
+			href, _ := s.Attr("href")
+			text := s.Text()
+			fmt.Printf("INNTERRRRRRRRRRRR   Link %d: %s (%s)\n", index+1, text, href)
+		})
 	}
-
-	result := concurrency.FanIn(done, channels...)
-
-	for doc := range result {
-		text := doc.Find(r.parseCallback.Selector).Text()
-		output <- callback(text)
-	}
-
-	return output
 }
 
 // TODO: call callback use parsing result
@@ -148,12 +161,32 @@ func (r *Remilia) Start() error {
 	}
 
 	result := concurrency.FanIn(done, channels...)
+	nextInput := make(chan *url.URL)
 
 	for doc := range result {
-		text := doc.Find(r.parseCallback.Selector).Text()
-		r.parseCallback.Fn(text)
+		go func(d *goquery.Document) {
+			defer close(nextInput)
+
+			d.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
+				href, _ := s.Attr("href")
+				fmt.Printf("Link %d: (%s)\n", index+1, href)
+				url, err := url.Parse(href)
+				if err != nil {
+					logger.Error("Wrong url", zap.Error(err))
+				}
+				nextInput <- url
+			})
+		}(doc)
 	}
 
+	// for u := range nextInput {
+	//fmt.Println("Next url is: ", u)
+	//}
+
+	r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
+		url, _ := url.Parse("www.google.com")
+		return url
+	})
 	return nil
 }
 

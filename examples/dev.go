@@ -12,9 +12,9 @@ import (
 )
 
 func main() {
-	scraper := remilia.New("https://go.dev", remilia.ConcurrentNumber(5))
+	scraper := remilia.New("https://www.23qb.net/lightnovel/", remilia.ConcurrentNumber(1))
 
-	scraper.Parse("h1", func(r string) {
+	scraper.Parse(".pagelink", func(r string) {
 		fmt.Println("Parse result: ", r)
 	})
 
