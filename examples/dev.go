@@ -11,10 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-func init() {
-	logger.New()
-}
-
 func main() {
 	scraper := remilia.New("https://www.23qb.net/lightnovel/", remilia.ConcurrentNumber(1))
 
@@ -55,7 +51,6 @@ func test() {
 func fetchURL(url string, out chan<- interface{}, done <-chan struct{}) {
 	resp, err := http.Get(url)
 	if err != nil {
-		logger.Error("Request error", zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()

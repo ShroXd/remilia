@@ -1,6 +1,8 @@
 package remilia
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"remilia/pkg/concurrency"
@@ -10,9 +12,11 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
+	// "go.uber.org/zap"
 )
 
 type Remilia struct {
+	ID               string
 	URL              string
 	Name             string
 	ConcurrentNumber int
@@ -25,6 +29,7 @@ type Remilia struct {
 	client        *network.Client
 	parseCallback *ParseCallbackContainer
 	pipeline      []*PipelineContainer
+	logger        *logger.Logger
 }
 
 type (
@@ -63,6 +68,13 @@ func (r *Remilia) withOptions(opts ...Option) *Remilia {
 
 // init setup private deps
 func (r *Remilia) init() {
+	logger, err := logger.NewLogger(r.ID, r.Name)
+	if err != nil {
+		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+		// TODO: consider is it necessary to stop entire application?
+	}
+
+	r.logger = logger
 	r.client = network.NewClient()
 }
 
@@ -74,7 +86,7 @@ func (r *Remilia) visit(
 ) {
 	resp, err := http.Get(url)
 	if err != nil {
-		logger.Error("Request error", zap.Error(err))
+		r.logger.Error("Failed to fetch data", zap.String("URL", url), zap.Error(err))
 		return
 	}
 	defer resp.Body.Close()
@@ -95,7 +107,7 @@ func (r *Remilia) visit(
 func (r *Remilia) responseParser(resp *http.Response) *goquery.Document {
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		logger.Error("Failed to parse html", zap.Error(err))
+		r.logger.Error("Failed to decode the response payload", zap.Error(err))
 	}
 
 	return doc
@@ -108,17 +120,17 @@ func (r *Remilia) clone() *Remilia {
 }
 
 func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
-	logger.Debug("Visiting the url", zap.String("url", url.String()))
+	// logger.Debug("Visiting the url", zap.String("url", url.String()))
 	resp, err := http.Get(url.String())
 	if err != nil {
-		logger.Error("Request error", zap.Error(err))
+		// logger.Error("Request error", zap.Error(err))
 		// TODO: pass error to caller
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		logger.Error("Error during pass response", zap.Error(err))
+		// logger.Error("Error during pass response", zap.Error(err))
 	}
 
 	return doc
@@ -144,7 +156,7 @@ func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
 //}
 
 func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
-	logger.Info("Transform url string list to read-only channel")
+	// logger.Info("Transform url string list to read-only channel")
 	out := make(chan *url.URL)
 
 	go func() {
@@ -152,10 +164,10 @@ func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 		for _, urlString := range urls {
 			parsedURL, err := url.Parse(urlString)
 			if err != nil {
-				logger.Error("Error during parsing url", zap.Error(err))
+				// logger.Error("Error during parsing url", zap.Error(err))
 			}
 
-			logger.Debug("Push url to head channel", zap.String("channel", "head"), zap.String("function", "streamGenerator"), zap.String("url", urlString))
+			// logger.Debug("Push url to head channel", zap.String("channel", "head"), zap.String("function", "streamGenerator"), zap.String("url", urlString))
 			out <- parsedURL
 		}
 	}()
@@ -193,9 +205,9 @@ func (r *Remilia) FirstGenerator() <-chan *url.URL {
 				href, _ := s.Attr("href")
 				url, err := url.Parse(href)
 				if err != nil {
-					logger.Error("Wrong url", zap.Error(err))
+					//	logger.Error("Wrong url", zap.Error(err))
 				}
-				logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
+				// logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
 				nextInput <- url
 			})
 		}(doc)
@@ -210,14 +222,14 @@ func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) []*url.URL {
 
 	out := make([]*url.URL, 0, 5)
 
-	logger.Debug("Parse document object", zap.String("function", "simpleVisitWrapper"))
+	// logger.Debug("Parse document object", zap.String("function", "simpleVisitWrapper"))
 	doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
 		href, _ := s.Attr("href")
 		url, err := url.Parse(href)
 		if err != nil {
-			logger.Error("Wrong url", zap.Error(err))
+			//		logger.Error("Wrong url", zap.Error(err))
 		}
-		logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
+		//	logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
 		out = append(out, url)
 	})
 
@@ -242,7 +254,8 @@ func (r *Remilia) Start() error {
 	)
 
 	for v := range nextInput {
-		logger.Debug("url from channel", zap.String("url", v.String()))
+		// logger.Debug("url from channel", zap.String("url", v.String()))
+		fmt.Println(v)
 	}
 
 	// TODO: tee-channel pattern, one is for url builder, another is for content parser

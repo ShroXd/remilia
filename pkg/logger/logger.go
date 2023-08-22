@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 
@@ -10,11 +9,11 @@ import (
 )
 
 // TODO: add the scraper name to the log
-type logger struct {
+type Logger struct {
 	internal *zap.Logger
 }
 
-func newLogger() (*logger, error) {
+func NewLogger(id, name string) (*Logger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
@@ -51,45 +50,37 @@ func newLogger() (*logger, error) {
 	core := zapcore.NewTee(consoleCore, fileCore)
 	zlogger := zap.New(core)
 
-	return &logger{
-		internal: zlogger,
+	scraperLogger := zlogger.With(zap.String("ID", id), zap.String("scraperName", name))
+
+	return &Logger{
+		internal: scraperLogger,
 	}, nil
 }
 
-var globalLogger *logger
-
-func New() {
-	var err error
-	globalLogger, err = newLogger()
-	if err != nil {
-		log.Panic(err)
-	}
+func (l *Logger) Debug(msg string, fields ...zap.Field) {
+	l.internal.Debug(msg, fields...)
 }
 
-func Debug(msg string, fields ...zap.Field) {
-	globalLogger.internal.Debug(msg, fields...)
+func (l *Logger) Info(msg string, fields ...zap.Field) {
+	l.internal.Info(msg, fields...)
 }
 
-func Info(msg string, fields ...zap.Field) {
-	globalLogger.internal.Info(msg, fields...)
+func (l *Logger) Warn(msg string, fields ...zap.Field) {
+	l.internal.Warn(msg, fields...)
 }
 
-func Warn(msg string, fields ...zap.Field) {
-	globalLogger.internal.Warn(msg, fields...)
+func (l *Logger) Error(msg string, fields ...zap.Field) {
+	l.internal.Error(msg, fields...)
 }
 
-func Error(msg string, fields ...zap.Field) {
-	globalLogger.internal.Error(msg, fields...)
+func (l *Logger) DPanic(msg string, fields ...zap.Field) {
+	l.internal.DPanic(msg, fields...)
 }
 
-func DPanic(msg string, fields ...zap.Field) {
-	globalLogger.internal.DPanic(msg, fields...)
+func (l *Logger) Panic(msg string, fields ...zap.Field) {
+	l.internal.Panic(msg, fields...)
 }
 
-func Panic(msg string, fields ...zap.Field) {
-	globalLogger.internal.Panic(msg, fields...)
-}
-
-func Fatal(msg string, fields ...zap.Field) {
-	globalLogger.internal.Fatal(msg, fields...)
+func (l *Logger) Fatal(msg string, fields ...zap.Field) {
+	l.internal.Fatal(msg, fields...)
 }
