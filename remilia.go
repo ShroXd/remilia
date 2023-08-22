@@ -153,16 +153,34 @@ func (r *Remilia) Start() error {
 	done := make(chan struct{})
 	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
 
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		ch := make(chan *goquery.Document)
-		channels[i] = ch
+	initURLChannel := func() <-chan *url.URL {
+		startURL := make(chan *url.URL)
 
-		go r.visit(done, r.URL, ch, r.responseParser)
+		go func() {
+			defer close(startURL)
+			u, _ := url.Parse("https://www.23qb.net/lightnovel/")
+
+			startURL <- u
+		}()
+
+		return startURL
+	}
+
+	startURL := initURLChannel()
+
+	firstResult := make(chan *goquery.Document)
+	for i := 0; i < r.ConcurrentNumber; i++ {
+		channels[i] = firstResult
+	}
+
+	for start_url := range startURL {
+		go r.visit(done, start_url.String(), firstResult, r.responseParser)
 	}
 
 	result := concurrency.FanIn(done, channels...)
 	nextInput := make(chan *url.URL)
 
+	// This should be the end consumer of data
 	for doc := range result {
 		go func(d *goquery.Document) {
 			defer close(nextInput)
