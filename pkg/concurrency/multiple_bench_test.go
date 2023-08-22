@@ -49,7 +49,7 @@ func BenchmarkFanOut(b *testing.B) {
 
 				input := s.data
 				done := make(chan struct{})
-				fn := func(raw int) int { return raw }
+				fn := func(raw int) []int { return []int{raw} }
 
 				b.StartTimer()
 

@@ -124,24 +124,24 @@ func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
 	return doc
 }
 
-func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, callback func(d *goquery.Document) *url.URL) {
-	logger.Debug("Pipeline block start working")
-	done := make(chan struct{})
-
-	output := concurrency.FanOut(
-		done,
-		input,
-		r.ConcurrentNumber,
-		r.simpleVisit,
-	)
-
-	for doc := range output {
-		doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
-			href, _ := s.Attr("href")
-			logger.Debug("get url successfully", zap.String("url: ", href))
-		})
-	}
-}
+//func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, callback func(d *goquery.Document) *url.URL) {
+//	logger.Debug("Pipeline block start working")
+//	done := make(chan struct{})
+//
+//	output := concurrency.FanOut(
+//	done,
+//	input,
+//	r.ConcurrentNumber,
+//	r.simpleVisit,
+//	)
+//
+//	for doc := range output {
+//	doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
+//	href, _ := s.Attr("href")
+//	logger.Debug("get url successfully", zap.String("url: ", href))
+//	})
+//	}
+//}
 
 func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 	logger.Info("Transform url string list to read-only channel")
@@ -205,10 +205,10 @@ func (r *Remilia) FirstGenerator() <-chan *url.URL {
 }
 
 // User will provide this function
-func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) *url.URL {
+func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) []*url.URL {
 	doc := r.simpleVisit(currentURL)
 
-	var out *url.URL
+	out := make([]*url.URL, 0, 5)
 
 	logger.Debug("Parse document object", zap.String("function", "simpleVisitWrapper"))
 	doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
@@ -218,7 +218,7 @@ func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) *url.URL {
 			logger.Error("Wrong url", zap.Error(err))
 		}
 		logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
-		out = url
+		out = append(out, url)
 	})
 
 	// TODO: convert url list to stream channel
@@ -241,12 +241,16 @@ func (r *Remilia) Start() error {
 		r.simpleVisitWrapper,
 	)
 
+	for v := range nextInput {
+		logger.Debug("url from channel", zap.String("url", v.String()))
+	}
+
 	// TODO: tee-channel pattern, one is for url builder, another is for content parser
 
-	r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
-		url, _ := url.Parse("www.google.com")
-		return url
-	})
+	// r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
+	//	url, _ := url.Parse("www.google.com")
+	//	return url
+	//	})
 	return nil
 }
 

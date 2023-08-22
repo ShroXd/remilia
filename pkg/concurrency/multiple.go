@@ -1,10 +1,8 @@
 package concurrency
 
 import (
-	"remilia/pkg/logger"
+	"log"
 	"sync"
-
-	"go.uber.org/zap"
 )
 
 // TODO: add timeout for each function in select statement
@@ -45,7 +43,7 @@ func FanOut[T any, U any](
 	done <-chan struct{},
 	input <-chan T,
 	workerCount int,
-	processFn func(T) U,
+	processFn func(T) []U,
 ) <-chan U {
 	var wg sync.WaitGroup
 	output := make(chan U)
@@ -59,13 +57,17 @@ func FanOut[T any, U any](
 				if !ok {
 					return
 				}
-				logger.Debug("Push url to mid channel", zap.String("channel", "middle"), zap.String("function", "FanOut"))
 				processedValue := processFn(value)
-				select {
-				case output <- processedValue:
-				case <-done:
-					return
+
+				for _, element := range processedValue {
+					log.Println("Push element to channel: ", element)
+					select {
+					case output <- element:
+					case <-done:
+						return
+					}
 				}
+
 			case <-done:
 				return
 			}

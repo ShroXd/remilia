@@ -82,7 +82,7 @@ func TestFanOut(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		processer := func(input string) string { return input }
+		processer := func(input string) []string { return []string{input} }
 		out := FanOut(done, ch, 1, processer)
 		if got := <-out; got != "test" {
 			t.Fatalf("expected 'test', got %v", got)
@@ -99,7 +99,7 @@ func TestFanOut(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		processer := func(input string) string { return input }
+		processer := func(input string) []string { return []string{input} }
 		out := FanOut(done, ch, 5, processer)
 
 		for i := 0; i < 3; i++ {
@@ -119,7 +119,7 @@ func TestFanOut(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		processer := func(input string) string { return input }
+		processer := func(input string) []string { return []string{input} }
 		out := FanOut(done, ch, 1, processer)
 
 		for i := 0; i < 3; i++ {
@@ -139,7 +139,7 @@ func TestFanOut(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		processer := func(input string) string { return input }
+		processer := func(input string) []string { return []string{input} }
 		out := FanOut(done, ch, 0, processer)
 
 		_, open := <-out
@@ -156,7 +156,7 @@ func TestFanOut(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		processer := func(input int) int { return input * 2 }
+		processer := func(input int) []int { return []int{input * 2} }
 		out := FanOut(done, ch, 1, processer)
 
 		if got := <-out; got != 2 {
@@ -173,8 +173,8 @@ func TestFanOut(t *testing.T) {
 		close(input)
 
 		done := make(chan struct{})
-		output := FanOut(done, input, 3, func(i int) int {
-			return i * 2
+		output := FanOut(done, input, 3, func(i int) []int {
+			return []int{i * 2}
 		})
 
 		// Close done
