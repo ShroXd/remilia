@@ -204,9 +204,41 @@ func (r *Remilia) FirstGenerator() <-chan *url.URL {
 	return nextInput
 }
 
+// User will provide this function
+func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) *url.URL {
+	doc := r.simpleVisit(currentURL)
+
+	var out *url.URL
+
+	logger.Debug("Parse document object", zap.String("function", "simpleVisitWrapper"))
+	doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
+		href, _ := s.Attr("href")
+		url, err := url.Parse(href)
+		if err != nil {
+			logger.Error("Wrong url", zap.Error(err))
+		}
+		logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
+		out = url
+	})
+
+	return out
+}
+
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
-	nextInput := r.FirstGenerator()
+	// nextInput := r.FirstGenerator()
+
+	urls := []string{"https://www.23qb.net/lightnovel/"}
+
+	urlStream := r.streamGenerator(urls)
+
+	done := make(chan struct{})
+	nextInput := concurrency.FanOut(
+		done,
+		urlStream,
+		r.ConcurrentNumber,
+		r.simpleVisitWrapper,
+	)
 
 	r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
 		url, _ := url.Parse("www.google.com")
