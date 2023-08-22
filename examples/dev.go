@@ -11,6 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
+func init() {
+	logger.New()
+}
+
 func main() {
 	scraper := remilia.New("https://www.23qb.net/lightnovel/", remilia.ConcurrentNumber(1))
 

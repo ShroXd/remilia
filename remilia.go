@@ -1,7 +1,6 @@
 package remilia
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"remilia/pkg/concurrency"
@@ -109,7 +108,7 @@ func (r *Remilia) clone() *Remilia {
 }
 
 func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
-	fmt.Println("Visiting: ", url)
+	logger.Debug("Visiting the url", zap.String("url", url.String()))
 	resp, err := http.Get(url.String())
 	if err != nil {
 		logger.Error("Request error", zap.Error(err))
@@ -126,7 +125,7 @@ func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
 }
 
 func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, callback func(d *goquery.Document) *url.URL) {
-	fmt.Println("TEST PIPELINE")
+	logger.Debug("Pipeline block start working")
 	done := make(chan struct{})
 
 	output := concurrency.FanOut(
@@ -139,8 +138,7 @@ func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, call
 	for doc := range output {
 		doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
 			href, _ := s.Attr("href")
-			text := s.Text()
-			fmt.Printf("INNTERRRRRRRRRRRR   Link %d: %s (%s)\n", index+1, text, href)
+			logger.Debug("get url successfully", zap.String("url: ", href))
 		})
 	}
 }
@@ -148,33 +146,42 @@ func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, call
 // TODO: call callback use parsing result
 func (r *Remilia) consumerController() {}
 
-// Start starts web collecting work via sending a request
-func (r *Remilia) Start() error {
-	done := make(chan struct{})
-	channels := make([]<-chan *goquery.Document, r.ConcurrentNumber)
+// 1. pull urls from provided pool and send request.
+// 2. The urls array provided by user, convert it to channel first.
+func (r *Remilia) FirstGenerator() <-chan *url.URL {
+	urls := []string{"https://www.23qb.net/lightnovel/"}
+	channels := make([]<-chan *goquery.Document, len(urls))
 
+	// convert url string to url channel
 	initURLChannel := func() <-chan *url.URL {
-		startURL := make(chan *url.URL)
+		out := make(chan *url.URL)
 
 		go func() {
-			defer close(startURL)
-			u, _ := url.Parse("https://www.23qb.net/lightnovel/")
+			defer close(out)
+			for _, u := range urls {
+				parsedURL, err := url.Parse(u)
+				if err != nil {
+					logger.Error("Error during parse url", zap.Error(err))
+				}
 
-			startURL <- u
+				logger.Debug("Push url", zap.String("URL", u))
+				out <- parsedURL
+			}
 		}()
 
-		return startURL
+		return out
 	}
 
-	startURL := initURLChannel()
+	generator := initURLChannel()
 
-	firstResult := make(chan *goquery.Document)
-	for i := 0; i < r.ConcurrentNumber; i++ {
-		channels[i] = firstResult
+	firstLevelURL := make(chan *goquery.Document)
+	for i := 0; i < len(urls); i++ {
+		channels[i] = firstLevelURL
 	}
 
-	for start_url := range startURL {
-		go r.visit(done, start_url.String(), firstResult, r.responseParser)
+	done := make(chan struct{})
+	for start_url := range generator {
+		go r.visit(done, start_url.String(), firstLevelURL, r.responseParser)
 	}
 
 	result := concurrency.FanIn(done, channels...)
@@ -187,19 +194,22 @@ func (r *Remilia) Start() error {
 
 			d.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
 				href, _ := s.Attr("href")
-				fmt.Printf("Link %d: (%s)\n", index+1, href)
 				url, err := url.Parse(href)
 				if err != nil {
 					logger.Error("Wrong url", zap.Error(err))
 				}
+				logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
 				nextInput <- url
 			})
 		}(doc)
 	}
 
-	// for u := range nextInput {
-	//fmt.Println("Next url is: ", u)
-	//}
+	return nextInput
+}
+
+// Start starts web collecting work via sending a request
+func (r *Remilia) Start() error {
+	nextInput := r.FirstGenerator()
 
 	r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
 		url, _ := url.Parse("www.google.com")
