@@ -155,7 +155,7 @@ func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 				logger.Error("Error during parsing url", zap.Error(err))
 			}
 
-			logger.Debug("Push new url", zap.String("function", "streamGenerator"), zap.String("url", urlString))
+			logger.Debug("Push url to head channel", zap.String("channel", "head"), zap.String("function", "streamGenerator"), zap.String("url", urlString))
 			out <- parsedURL
 		}
 	}()
@@ -221,6 +221,7 @@ func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) *url.URL {
 		out = url
 	})
 
+	// TODO: convert url list to stream channel
 	return out
 }
 
@@ -239,6 +240,8 @@ func (r *Remilia) Start() error {
 		r.ConcurrentNumber,
 		r.simpleVisitWrapper,
 	)
+
+	// TODO: tee-channel pattern, one is for url builder, another is for content parser
 
 	r.testPipelineBlock(nextInput, ".pagelink", func(d *goquery.Document) *url.URL {
 		url, _ := url.Parse("www.google.com")

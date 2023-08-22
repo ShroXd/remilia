@@ -1,7 +1,10 @@
 package concurrency
 
 import (
+	"remilia/pkg/logger"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // TODO: add timeout for each function in select statement
@@ -56,6 +59,7 @@ func FanOut[T any, U any](
 				if !ok {
 					return
 				}
+				logger.Debug("Push url to mid channel", zap.String("channel", "middle"), zap.String("function", "FanOut"))
 				processedValue := processFn(value)
 				select {
 				case output <- processedValue:
