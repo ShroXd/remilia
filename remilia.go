@@ -143,44 +143,41 @@ func (r *Remilia) testPipelineBlock(input <-chan *url.URL, selector string, call
 	}
 }
 
-// TODO: call callback use parsing result
-func (r *Remilia) consumerController() {}
+func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
+	logger.Info("Transform url string list to read-only channel")
+	out := make(chan *url.URL)
+
+	go func() {
+		defer close(out)
+		for _, urlString := range urls {
+			parsedURL, err := url.Parse(urlString)
+			if err != nil {
+				logger.Error("Error during parsing url", zap.Error(err))
+			}
+
+			logger.Debug("Push new url", zap.String("function", "streamGenerator"), zap.String("url", urlString))
+			out <- parsedURL
+		}
+	}()
+
+	return out
+}
 
 // 1. pull urls from provided pool and send request.
 // 2. The urls array provided by user, convert it to channel first.
 func (r *Remilia) FirstGenerator() <-chan *url.URL {
 	urls := []string{"https://www.23qb.net/lightnovel/"}
-	channels := make([]<-chan *goquery.Document, len(urls))
 
-	// convert url string to url channel
-	initURLChannel := func() <-chan *url.URL {
-		out := make(chan *url.URL)
-
-		go func() {
-			defer close(out)
-			for _, u := range urls {
-				parsedURL, err := url.Parse(u)
-				if err != nil {
-					logger.Error("Error during parse url", zap.Error(err))
-				}
-
-				logger.Debug("Push url", zap.String("URL", u))
-				out <- parsedURL
-			}
-		}()
-
-		return out
-	}
-
-	generator := initURLChannel()
+	urlStream := r.streamGenerator(urls)
 
 	firstLevelURL := make(chan *goquery.Document)
+	channels := make([]<-chan *goquery.Document, len(urls))
 	for i := 0; i < len(urls); i++ {
 		channels[i] = firstLevelURL
 	}
 
 	done := make(chan struct{})
-	for start_url := range generator {
+	for start_url := range urlStream {
 		go r.visit(done, start_url.String(), firstLevelURL, r.responseParser)
 	}
 
