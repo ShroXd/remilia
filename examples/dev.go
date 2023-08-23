@@ -6,9 +6,6 @@ import (
 	"net/http"
 	"remilia"
 	"remilia/pkg/concurrency"
-	"remilia/pkg/logger"
-
-	"go.uber.org/zap"
 )
 
 func main() {

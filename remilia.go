@@ -120,17 +120,17 @@ func (r *Remilia) clone() *Remilia {
 }
 
 func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
-	// logger.Debug("Visiting the url", zap.String("url", url.String()))
+	r.logger.Info("Sending request", zap.String("url", url.String()))
+
 	resp, err := http.Get(url.String())
 	if err != nil {
-		// logger.Error("Request error", zap.Error(err))
-		// TODO: pass error to caller
+		r.logger.Error("Failed to get a response", zap.String("url", url.String()), zap.Error(err))
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		// logger.Error("Error during pass response", zap.Error(err))
+		r.logger.Error("Failed to parse response body", zap.String("url", url.String()), zap.Error(err))
 	}
 
 	return doc
@@ -156,18 +156,19 @@ func (r *Remilia) simpleVisit(url *url.URL) *goquery.Document {
 //}
 
 func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
-	// logger.Info("Transform url string list to read-only channel")
+	r.logger.Debug("Creating read-only channel holding provided url")
 	out := make(chan *url.URL)
 
 	go func() {
 		defer close(out)
+
 		for _, urlString := range urls {
 			parsedURL, err := url.Parse(urlString)
 			if err != nil {
-				// logger.Error("Error during parsing url", zap.Error(err))
+				r.logger.Error("Failed to parse url string to *url.URL", zap.String("url", urlString), zap.Error(err))
 			}
 
-			// logger.Debug("Push url to head channel", zap.String("channel", "head"), zap.String("function", "streamGenerator"), zap.String("url", urlString))
+			r.logger.Debug("Push url to channel", zap.String("url", urlString))
 			out <- parsedURL
 		}
 	}()
@@ -222,18 +223,14 @@ func (r *Remilia) simpleVisitWrapper(currentURL *url.URL) []*url.URL {
 
 	out := make([]*url.URL, 0, 5)
 
-	// logger.Debug("Parse document object", zap.String("function", "simpleVisitWrapper"))
+	r.logger.Debug("Parsing HTML content")
 	doc.Find(".pagelink a").Each(func(index int, s *goquery.Selection) {
 		href, _ := s.Attr("href")
-		url, err := url.Parse(href)
-		if err != nil {
-			//		logger.Error("Wrong url", zap.Error(err))
-		}
-		//	logger.Debug("Get url for next level pipeline", zap.String("url", url.String()), zap.Int("index", index))
+		url, _ := url.Parse(href)
+
 		out = append(out, url)
 	})
 
-	// TODO: convert url list to stream channel
 	return out
 }
 
