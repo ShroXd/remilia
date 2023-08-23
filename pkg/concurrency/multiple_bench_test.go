@@ -53,7 +53,7 @@ func BenchmarkFanOut(b *testing.B) {
 
 				b.StartTimer()
 
-				out := FanOut(done, input, 1000, fn)
+				out := FanOut(done, input, 1, fn)
 
 				for range out {
 				}

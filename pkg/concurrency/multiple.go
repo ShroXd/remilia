@@ -1,12 +1,11 @@
 package concurrency
 
 import (
-	"log"
 	"sync"
 )
 
 // TODO: add timeout for each function in select statement
-
+// TODO: remove FanOut, I misunderstand the content on the book
 func FanIn[T any](
 	done <-chan struct{},
 	channels ...<-chan T,
@@ -60,7 +59,6 @@ func FanOut[T any, U any](
 				processedValue := processFn(value)
 
 				for _, element := range processedValue {
-					log.Println("Push element to channel: ", element)
 					select {
 					case output <- element:
 					case <-done:
