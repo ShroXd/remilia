@@ -12,8 +12,17 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
-	// "go.uber.org/zap"
 )
+
+type (
+	URLGenerator  func(s *goquery.Selection) *url.URL
+	HTMLProcessor func(s *goquery.Selection)
+)
+
+type Middleware struct {
+	urlGenerator   URLGenerator
+	htmlProcessors []HTMLProcessor
+}
 
 type Remilia struct {
 	ID               string
@@ -30,6 +39,7 @@ type Remilia struct {
 	parseCallback *ParseCallbackContainer
 	pipeline      []*PipelineContainer
 	logger        *logger.Logger
+	chain         []Middleware
 }
 
 type (
@@ -145,6 +155,47 @@ func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *
 		case urlStream <- callback(s):
 		}
 	})
+}
+
+func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor) {
+	mw := Middleware{
+		urlGenerator:   urlGenerator,
+		htmlProcessors: htmlProcessors,
+	}
+
+	r.chain = append(r.chain, mw)
+}
+
+func (r *Remilia) NewStart() error {
+	fmt.Println("URL: ", r.URL)
+	fmt.Println("Chan: ", r.chain)
+
+	urls := []string{r.URL}
+	ch := r.streamGenerator(urls)
+
+	for _, fn := range r.chain {
+		ch = r.block(ch, fn.urlGenerator)
+	}
+
+	for res := range ch {
+		fmt.Println("Get result at the end of chains: ", res)
+	}
+
+	return nil
+}
+
+func (r *Remilia) block(input <-chan *url.URL, callback URLGenerator) <-chan *url.URL {
+	numberOfWorkers := 5
+	done := make(chan struct{})
+	channels := make([]<-chan *url.URL, numberOfWorkers)
+
+	for i := 0; i < numberOfWorkers; i++ {
+		channels[i] = r.visit(done, input, ".pagelink a", callback)
+	}
+
+	out := concurrency.FanIn(done, channels...)
+
+	return out
 }
 
 func (r *Remilia) Start() error {
