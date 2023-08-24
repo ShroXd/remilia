@@ -1,6 +1,6 @@
 package utils
 
-func GenerateData(n int) <-chan int {
+func GenerateData(n int) chan int {
 	out := make(chan int)
 
 	go func() {

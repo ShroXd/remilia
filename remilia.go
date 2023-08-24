@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -130,10 +131,72 @@ func (r *Remilia) urlGeneratorHandler(selector string, callback func(s *goquery.
 	}
 }
 
+func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
+	urlStream := make(chan *url.URL)
+
+	go func() {
+		defer close(urlStream)
+		for reqURL := range reqURLStream {
+
+			r.logger.Info("Sending request", zap.String("url", reqURL.String()))
+
+			resp, err := http.Get(reqURL.String())
+			if err != nil {
+				r.logger.Error("Failed to get a response", zap.String("url", reqURL.String()), zap.Error(err))
+			}
+			defer resp.Body.Close()
+
+			doc, err := goquery.NewDocumentFromReader(resp.Body)
+			if err != nil {
+				r.logger.Error("Failed to parse response body", zap.String("url", reqURL.String()), zap.Error(err))
+			}
+
+			r.logger.Debug("Parsing HTML content")
+			doc.Find(selector).Each(func(index int, s *goquery.Selection) {
+				// TODO: encapsulate the logic
+				select {
+				case <-done:
+					return
+				case urlStream <- callback(s):
+				}
+			})
+		}
+	}()
+
+	return urlStream
+}
+
+func (r *Remilia) NewStart() error {
+	urls := []string{"https://www.23qb.net/lightnovel/"}
+
+	urlStream := r.streamGenerator(urls)
+
+	selector := ".pagelink a"
+	callback := func(s *goquery.Selection) *url.URL {
+		href, _ := s.Attr("href")
+		url, _ := url.Parse(href)
+
+		return url
+	}
+	numberOfWorkers := 5
+
+	done := make(chan struct{})
+	channels := make([]<-chan *url.URL, numberOfWorkers)
+
+	for i := 0; i < numberOfWorkers; i++ {
+		// TODO: refactor the done signal channel
+		channels[i] = r.visit(done, urlStream, selector, callback)
+	}
+
+	for res := range concurrency.FanIn(done, channels...) {
+		fmt.Println("Res: ", res)
+	}
+
+	return nil
+}
+
 // Start starts web collecting work via sending a request
 func (r *Remilia) Start() error {
-	// nextInput := r.FirstGenerator()
-
 	urls := []string{"https://www.23qb.net/lightnovel/"}
 
 	urlStream := r.streamGenerator(urls)

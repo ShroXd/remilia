@@ -15,7 +15,8 @@ func main() {
 		fmt.Println("Parse result: ", r)
 	})
 
-	err := scraper.Start()
+	// err := scraper.Start()
+	err := scraper.NewStart()
 	if err != nil {
 		log.Print(err)
 	}
