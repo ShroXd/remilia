@@ -106,38 +106,45 @@ func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 }
 
 func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
+	// TODO: record visited url
 	urlStream := make(chan *url.URL)
 
 	go func() {
+		defer r.logger.Info("Successfully generated URL stream")
 		defer close(urlStream)
+
 		for reqURL := range reqURLStream {
-
-			r.logger.Info("Sending request", zap.String("url", reqURL.String()))
-
-			resp, err := http.Get(reqURL.String())
-			if err != nil {
-				r.logger.Error("Failed to get a response", zap.String("url", reqURL.String()), zap.Error(err))
-			}
-			defer resp.Body.Close()
-
-			doc, err := goquery.NewDocumentFromReader(resp.Body)
-			if err != nil {
-				r.logger.Error("Failed to parse response body", zap.String("url", reqURL.String()), zap.Error(err))
-			}
-
-			r.logger.Debug("Parsing HTML content")
-			doc.Find(selector).Each(func(index int, s *goquery.Selection) {
-				// TODO: encapsulate the logic
-				select {
-				case <-done:
-					return
-				case urlStream <- callback(s):
-				}
-			})
+			r.processURL(reqURL, selector, callback, done, urlStream)
 		}
 	}()
 
 	return urlStream
+}
+
+func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *goquery.Selection) *url.URL, done <-chan struct{}, urlStream chan<- *url.URL) {
+	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
+
+	resp, err := http.Get(reqURL.String())
+	if err != nil {
+		r.logger.Error("Failed to get a response", zap.String("url", reqURL.String()), zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		r.logger.Error("Failed to parse response body", zap.String("url", reqURL.String()), zap.Error(err))
+		return
+	}
+
+	r.logger.Debug("Parsing HTML content", zap.String("url", reqURL.String()))
+	doc.Find(selector).Each(func(index int, s *goquery.Selection) {
+		select {
+		case <-done:
+			return
+		case urlStream <- callback(s):
+		}
+	})
 }
 
 func (r *Remilia) Start() error {
@@ -155,14 +162,20 @@ func (r *Remilia) Start() error {
 	numberOfWorkers := 5
 
 	done := make(chan struct{})
-	channels := make([]<-chan *url.URL, numberOfWorkers)
+	channels1 := make([]<-chan *url.URL, numberOfWorkers)
 
 	for i := 0; i < numberOfWorkers; i++ {
 		// TODO: refactor the done signal channel
-		channels[i] = r.visit(done, urlStream, selector, callback)
+		channels1[i] = r.visit(done, urlStream, selector, callback)
 	}
 
-	for res := range concurrency.FanIn(done, channels...) {
+	level1 := concurrency.FanIn(done, channels1...)
+	channels2 := make([]<-chan *url.URL, numberOfWorkers)
+	for i := 0; i < numberOfWorkers; i++ {
+		channels2[i] = r.visit(done, level1, selector, callback)
+	}
+
+	for res := range concurrency.FanIn(done, channels2...) {
 		fmt.Println("Res: ", res)
 	}
 
