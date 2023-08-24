@@ -78,8 +78,8 @@ func (r *Remilia) clone() *Remilia {
 	return &copy
 }
 
-// streamGenerator creates a channel that sends parsed URLs from a slice of URL strings
-func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
+// urlsToChannel creates a channel that sends parsed URLs from a slice of URL strings
+func (r *Remilia) urlsToChannel(urls []string) <-chan *url.URL {
 	r.logger.Debug("Creating read-only channel holding provided url")
 	out := make(chan *url.URL)
 
@@ -100,8 +100,8 @@ func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 	return out
 }
 
-// visit reads URLs from reqURLStream, processes them, and sends the results to another channel
-func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
+// processURLsChannel reads URLs from reqURLStream, processes them, and sends the results to another channel
+func (r *Remilia) processURLsChannel(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
 	// TODO: record visited url
 	urlStream := make(chan *url.URL)
 
@@ -110,15 +110,15 @@ func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, sele
 		defer close(urlStream)
 
 		for reqURL := range reqURLStream {
-			r.processURL(reqURL, selector, callback, done, urlStream)
+			r.fetchAndProcessURL(reqURL, selector, callback, done, urlStream)
 		}
 	}()
 
 	return urlStream
 }
 
-// processURL sends a request to the given URL, parses the response, and applies the callback on the HTML content matched by the selector
-func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *goquery.Selection) *url.URL, done <-chan struct{}, urlStream chan<- *url.URL) {
+// fetchAndProcessURL sends a request to the given URL, parses the response, and applies the callback on the HTML content matched by the selector
+func (r *Remilia) fetchAndProcessURL(reqURL *url.URL, selector string, callback func(s *goquery.Selection) *url.URL, done <-chan struct{}, urlStream chan<- *url.URL) {
 	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
 
 	resp, err := http.Get(reqURL.String())
@@ -144,6 +144,19 @@ func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *
 	})
 }
 
+// processURLsConcurrently concurrently processes URLs using the callback and fans the results into a single channel
+func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, callback URLGenerator) <-chan *url.URL {
+	numberOfWorkers := 5
+	done := make(chan struct{})
+	channels := make([]<-chan *url.URL, numberOfWorkers)
+
+	for i := 0; i < numberOfWorkers; i++ {
+		channels[i] = r.processURLsChannel(done, input, ".pagelink a", callback)
+	}
+
+	return concurrency.FanIn(done, channels...)
+}
+
 // Use adds middleware for optional URL generation and HTML processing
 func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor) {
 	mw := Middleware{
@@ -159,10 +172,10 @@ func (r *Remilia) Start() error {
 	r.logger.Info("Starting crawl", zap.String("url", r.URL))
 
 	urls := []string{r.URL}
-	ch := r.streamGenerator(urls)
+	ch := r.urlsToChannel(urls)
 
 	for _, fn := range r.chain {
-		ch = r.block(ch, fn.urlGenerator)
+		ch = r.processURLsConcurrently(ch, fn.urlGenerator)
 	}
 
 	for res := range ch {
@@ -170,17 +183,4 @@ func (r *Remilia) Start() error {
 	}
 
 	return nil
-}
-
-// block concurrently processes URLs using the callback and fans the results into a single channel
-func (r *Remilia) block(input <-chan *url.URL, callback URLGenerator) <-chan *url.URL {
-	numberOfWorkers := 5
-	done := make(chan struct{})
-	channels := make([]<-chan *url.URL, numberOfWorkers)
-
-	for i := 0; i < numberOfWorkers; i++ {
-		channels[i] = r.visit(done, input, ".pagelink a", callback)
-	}
-
-	return concurrency.FanIn(done, channels...)
 }

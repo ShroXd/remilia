@@ -25,20 +25,6 @@ func main() {
 		return url
 	})
 
-	scraper.Use(func(s *goquery.Selection) *url.URL {
-		href, _ := s.Attr("href")
-		url, _ := url.Parse(href)
-
-		return url
-	})
-
-	scraper.Use(func(s *goquery.Selection) *url.URL {
-		href, _ := s.Attr("href")
-		url, _ := url.Parse(href)
-
-		return url
-	})
-
 	err := scraper.Start()
 	if err != nil {
 		log.Print(err)
