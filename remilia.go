@@ -35,26 +35,10 @@ type Remilia struct {
 	AllowedDomains []string
 	UserAgent      string
 
-	client        *network.Client
-	parseCallback *ParseCallbackContainer
-	pipeline      []*PipelineContainer
-	logger        *logger.Logger
-	chain         []Middleware
+	client *network.Client
+	logger *logger.Logger
+	chain  []Middleware
 }
-
-type (
-	ParseCallback          func(node string)
-	PipelineFn             func(node string) *url.URL
-	ParseCallbackContainer struct {
-		Fn       ParseCallback
-		Selector string
-	}
-
-	PipelineContainer struct {
-		Fn       PipelineFn
-		Selector string
-	}
-)
 
 func New(url string, options ...Option) *Remilia {
 	r := &Remilia{
@@ -94,6 +78,7 @@ func (r *Remilia) clone() *Remilia {
 	return &copy
 }
 
+// streamGenerator creates a channel that sends parsed URLs from a slice of URL strings
 func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 	r.logger.Debug("Creating read-only channel holding provided url")
 	out := make(chan *url.URL)
@@ -115,6 +100,7 @@ func (r *Remilia) streamGenerator(urls []string) <-chan *url.URL {
 	return out
 }
 
+// visit reads URLs from reqURLStream, processes them, and sends the results to another channel
 func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
 	// TODO: record visited url
 	urlStream := make(chan *url.URL)
@@ -131,6 +117,7 @@ func (r *Remilia) visit(done <-chan struct{}, reqURLStream <-chan *url.URL, sele
 	return urlStream
 }
 
+// processURL sends a request to the given URL, parses the response, and applies the callback on the HTML content matched by the selector
 func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *goquery.Selection) *url.URL, done <-chan struct{}, urlStream chan<- *url.URL) {
 	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
 
@@ -157,6 +144,7 @@ func (r *Remilia) processURL(reqURL *url.URL, selector string, callback func(s *
 	})
 }
 
+// Use adds middleware for optional URL generation and HTML processing
 func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor) {
 	mw := Middleware{
 		urlGenerator:   urlGenerator,
@@ -166,9 +154,9 @@ func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor
 	r.chain = append(r.chain, mw)
 }
 
-func (r *Remilia) NewStart() error {
-	fmt.Println("URL: ", r.URL)
-	fmt.Println("Chan: ", r.chain)
+// Start initiates the crawling process
+func (r *Remilia) Start() error {
+	r.logger.Info("Starting crawl", zap.String("url", r.URL))
 
 	urls := []string{r.URL}
 	ch := r.streamGenerator(urls)
@@ -184,6 +172,7 @@ func (r *Remilia) NewStart() error {
 	return nil
 }
 
+// block concurrently processes URLs using the callback and fans the results into a single channel
 func (r *Remilia) block(input <-chan *url.URL, callback URLGenerator) <-chan *url.URL {
 	numberOfWorkers := 5
 	done := make(chan struct{})
@@ -193,68 +182,5 @@ func (r *Remilia) block(input <-chan *url.URL, callback URLGenerator) <-chan *ur
 		channels[i] = r.visit(done, input, ".pagelink a", callback)
 	}
 
-	out := concurrency.FanIn(done, channels...)
-
-	return out
-}
-
-func (r *Remilia) Start() error {
-	urls := []string{"https://www.23qb.net/lightnovel/"}
-
-	urlStream := r.streamGenerator(urls)
-
-	selector := ".pagelink a"
-	callback := func(s *goquery.Selection) *url.URL {
-		href, _ := s.Attr("href")
-		url, _ := url.Parse(href)
-
-		return url
-	}
-	numberOfWorkers := 5
-
-	done := make(chan struct{})
-	channels1 := make([]<-chan *url.URL, numberOfWorkers)
-
-	for i := 0; i < numberOfWorkers; i++ {
-		// TODO: refactor the done signal channel
-		channels1[i] = r.visit(done, urlStream, selector, callback)
-	}
-
-	level1 := concurrency.FanIn(done, channels1...)
-	channels2 := make([]<-chan *url.URL, numberOfWorkers)
-	for i := 0; i < numberOfWorkers; i++ {
-		channels2[i] = r.visit(done, level1, selector, callback)
-	}
-
-	for res := range concurrency.FanIn(done, channels2...) {
-		fmt.Println("Res: ", res)
-	}
-
-	return nil
-}
-
-func (r *Remilia) Parse(selector string, fn ParseCallback) {
-	container := &ParseCallbackContainer{
-		Selector: selector,
-		Fn:       fn,
-	}
-
-	r.parseCallback = container
-}
-
-// TODO: make the return value can only call pipeline
-// TODO: check the result of callback, if it's a URL, use it in the pipeline
-func (r *Remilia) URLPipeline(selector string, generator PipelineFn) *Remilia {
-	container := &PipelineContainer{
-		Selector: selector,
-		Fn:       generator,
-	}
-
-	if r.pipeline == nil {
-		r.pipeline = []*PipelineContainer{container}
-	} else {
-		r.pipeline = append(r.pipeline, container)
-	}
-
-	return r
+	return concurrency.FanIn(done, channels...)
 }

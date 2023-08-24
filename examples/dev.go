@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/url"
 	"remilia"
@@ -38,19 +37,6 @@ func main() {
 		url, _ := url.Parse(href)
 
 		return url
-	})
-
-	err := scraper.NewStart()
-	if err != nil {
-		log.Print(err)
-	}
-}
-
-func preText() {
-	scraper := remilia.New("https://www.23qb.net/lightnovel/", remilia.ConcurrentNumber(1))
-
-	scraper.Parse(".pagelink", func(r string) {
-		fmt.Println("Parse result: ", r)
 	})
 
 	err := scraper.Start()
