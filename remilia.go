@@ -14,33 +14,24 @@ import (
 	"go.uber.org/zap"
 )
 
-type (
-	URLGenerator  func(s *goquery.Selection) *url.URL
-	HTMLProcessor func(s *goquery.Selection)
-	DataConsumer  func(data interface{})
-)
+type DataConsumer func(data interface{})
 
 type (
-	URLGeneratorA struct {
+	URLGenerator struct {
 		Fn       func(s *goquery.Selection) *url.URL
 		Selector string
 	}
 
-	HTMLProcessorA struct {
+	HTMLProcessor struct {
 		Fn           func(s *goquery.Selection)
 		Selector     string
 		DataConsumer DataConsumer
 	}
 )
 
-type MiddlewareA struct {
-	urlGenerator  URLGeneratorA
-	htmlProcessor []HTMLProcessorA
-}
-
 type Middleware struct {
-	urlGenerator   URLGenerator
-	htmlProcessors []HTMLProcessor
+	urlGenerator  URLGenerator
+	htmlProcessor []HTMLProcessor
 }
 
 type Remilia struct {
@@ -56,10 +47,9 @@ type Remilia struct {
 
 	client *network.Client
 	logger *logger.Logger
-	chain  []Middleware
 
-	chainA            []MiddlewareA
-	currentMiddleware *MiddlewareA
+	chain             []Middleware
+	currentMiddleware *Middleware
 }
 
 func New(url string, options ...Option) *Remilia {
@@ -167,7 +157,7 @@ func (r *Remilia) fetchAndProcessURL(reqURL *url.URL, selector string, callback 
 }
 
 // processURLsConcurrently concurrently processes URLs using the callback and fans the results into a single channel
-func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGeneratorA) <-chan *url.URL {
+func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGenerator) <-chan *url.URL {
 	numberOfWorkers := 5
 	done := make(chan struct{})
 	channels := make([]<-chan *url.URL, numberOfWorkers)
@@ -181,7 +171,7 @@ func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGener
 
 func (r *Remilia) ensureCurrentMiddleware() {
 	if r.currentMiddleware == nil {
-		r.currentMiddleware = &MiddlewareA{}
+		r.currentMiddleware = &Middleware{}
 	}
 }
 
@@ -193,11 +183,11 @@ func (r *Remilia) UseURL(selector string, urlGenFn func(s *goquery.Selection) *u
 	}
 
 	// Initialize a new Middleware and set its URLGenerator
-	newURLGenerator := URLGeneratorA{
+	newURLGenerator := URLGenerator{
 		Fn:       urlGenFn,
 		Selector: selector,
 	}
-	r.currentMiddleware = &MiddlewareA{
+	r.currentMiddleware = &Middleware{
 		urlGenerator: newURLGenerator,
 	}
 
@@ -207,7 +197,7 @@ func (r *Remilia) UseURL(selector string, urlGenFn func(s *goquery.Selection) *u
 func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection), dataConsumer DataConsumer) *Remilia {
 	r.ensureCurrentMiddleware()
 
-	newHTMLProcessor := HTMLProcessorA{
+	newHTMLProcessor := HTMLProcessor{
 		Fn:           htmlProcFn,
 		Selector:     selector,
 		DataConsumer: dataConsumer,
@@ -219,21 +209,11 @@ func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection)
 
 func (r *Remilia) AddToChain() *Remilia {
 	if r.currentMiddleware != nil {
-		r.chainA = append(r.chainA, *r.currentMiddleware)
+		r.chain = append(r.chain, *r.currentMiddleware)
 		r.currentMiddleware = nil
 	}
 
 	return nil
-}
-
-// Use adds middleware for optional URL generation and HTML processing
-func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor) {
-	mw := Middleware{
-		urlGenerator:   urlGenerator,
-		htmlProcessors: htmlProcessors,
-	}
-
-	r.chain = append(r.chain, mw)
 }
 
 // TODO: check and compress chain
@@ -244,7 +224,7 @@ func (r *Remilia) Start() error {
 	urls := []string{r.URL}
 	ch := r.urlsToChannel(urls)
 
-	for _, urlGen := range r.chainA {
+	for _, urlGen := range r.chain {
 		ch = r.processURLsConcurrently(ch, urlGen.urlGenerator)
 	}
 
