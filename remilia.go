@@ -17,7 +17,26 @@ import (
 type (
 	URLGenerator  func(s *goquery.Selection) *url.URL
 	HTMLProcessor func(s *goquery.Selection)
+	DataConsumer  func(data interface{})
 )
+
+type (
+	URLGeneratorA struct {
+		Fn       func(s *goquery.Selection) *url.URL
+		Selector string
+	}
+
+	HTMLProcessorA struct {
+		Fn           func(s *goquery.Selection)
+		Selector     string
+		DataConsumer DataConsumer
+	}
+)
+
+type MiddlewareA struct {
+	urlGenerator  URLGeneratorA
+	htmlProcessor []HTMLProcessorA
+}
 
 type Middleware struct {
 	urlGenerator   URLGenerator
@@ -38,6 +57,9 @@ type Remilia struct {
 	client *network.Client
 	logger *logger.Logger
 	chain  []Middleware
+
+	chainA            []MiddlewareA
+	currentMiddleware *MiddlewareA
 }
 
 func New(url string, options ...Option) *Remilia {
@@ -157,6 +179,53 @@ func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, callback URLGen
 	return concurrency.FanIn(done, channels...)
 }
 
+func (r *Remilia) ensureCurrentMiddleware() {
+	if r.currentMiddleware == nil {
+		r.currentMiddleware = &MiddlewareA{}
+	}
+}
+
+func (r *Remilia) UseURL(selector string, urlGenFn func(s *goquery.Selection) *url.URL) *Remilia {
+	r.ensureCurrentMiddleware()
+	// Check if urlGenerator is already set. If so, it's an error to set it again.
+	if r.currentMiddleware.urlGenerator.Fn != nil {
+		r.logger.Panic("URLGenerator is already set for this middleware")
+	}
+
+	// Initialize a new Middleware and set its URLGenerator
+	newURLGenerator := URLGeneratorA{
+		Fn:       urlGenFn,
+		Selector: selector,
+	}
+	r.currentMiddleware = &MiddlewareA{
+		urlGenerator: newURLGenerator,
+	}
+
+	return r
+}
+
+func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection), dataConsumer DataConsumer) *Remilia {
+	r.ensureCurrentMiddleware()
+
+	newHTMLProcessor := HTMLProcessorA{
+		Fn:           htmlProcFn,
+		Selector:     selector,
+		DataConsumer: dataConsumer,
+	}
+	r.currentMiddleware.htmlProcessor = append(r.currentMiddleware.htmlProcessor, newHTMLProcessor)
+
+	return r
+}
+
+func (r *Remilia) AddToChain() *Remilia {
+	if r.currentMiddleware != nil {
+		r.chainA = append(r.chainA, *r.currentMiddleware)
+		r.currentMiddleware = nil
+	}
+
+	return nil
+}
+
 // Use adds middleware for optional URL generation and HTML processing
 func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor) {
 	mw := Middleware{
@@ -167,6 +236,7 @@ func (r *Remilia) Use(urlGenerator URLGenerator, htmlProcessors ...HTMLProcessor
 	r.chain = append(r.chain, mw)
 }
 
+// TODO: check and compress chain
 // Start initiates the crawling process
 func (r *Remilia) Start() error {
 	r.logger.Info("Starting crawl", zap.String("url", r.URL))
