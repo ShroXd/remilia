@@ -167,13 +167,13 @@ func (r *Remilia) fetchAndProcessURL(reqURL *url.URL, selector string, callback 
 }
 
 // processURLsConcurrently concurrently processes URLs using the callback and fans the results into a single channel
-func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, callback URLGenerator) <-chan *url.URL {
+func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGeneratorA) <-chan *url.URL {
 	numberOfWorkers := 5
 	done := make(chan struct{})
 	channels := make([]<-chan *url.URL, numberOfWorkers)
 
 	for i := 0; i < numberOfWorkers; i++ {
-		channels[i] = r.processURLsChannel(done, input, ".pagelink a", callback)
+		channels[i] = r.processURLsChannel(done, input, urlGen.Selector, urlGen.Fn)
 	}
 
 	return concurrency.FanIn(done, channels...)
@@ -244,8 +244,8 @@ func (r *Remilia) Start() error {
 	urls := []string{r.URL}
 	ch := r.urlsToChannel(urls)
 
-	for _, fn := range r.chain {
-		ch = r.processURLsConcurrently(ch, fn.urlGenerator)
+	for _, urlGen := range r.chainA {
+		ch = r.processURLsConcurrently(ch, urlGen.urlGenerator)
 	}
 
 	for res := range ch {
