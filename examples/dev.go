@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"remilia"
@@ -23,6 +24,12 @@ func main() {
 		url, _ := url.Parse(href)
 
 		return url
+	}).UseHTML("h3 a", func(s *goquery.Selection) interface{} {
+		return s.Text()
+	}, func(data <-chan interface{}) {
+		for v := range data {
+			fmt.Println("Get data in data consumer: ", v)
+		}
 	}).AddToChain()
 
 	err := scraper.Start()

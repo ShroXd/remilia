@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type DataConsumer func(data interface{})
+type DataConsumer func(data <-chan interface{})
 
 type (
 	URLGenerator struct {
@@ -23,7 +23,7 @@ type (
 	}
 
 	HTMLProcessor struct {
-		Fn           func(s *goquery.Selection)
+		Fn           func(s *goquery.Selection) interface{}
 		Selector     string
 		DataConsumer DataConsumer
 	}
@@ -168,6 +168,14 @@ func (r *Remilia) fetchAndProcessURL(
 		case urlStream <- urlGen.Fn(s):
 		}
 	})
+
+	doc.Find(htmlProc.Selector).Each(func(index int, s *goquery.Selection) {
+		select {
+		case <-done:
+			return
+		case htmlStream <- htmlProc.Fn(s):
+		}
+	})
 }
 
 // processURLsConcurrently concurrently processes URLs using the callback and fans the results into a single channel
@@ -209,7 +217,7 @@ func (r *Remilia) UseURL(selector string, urlGenFn func(s *goquery.Selection) *u
 	return r
 }
 
-func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection), dataConsumer DataConsumer) *Remilia {
+func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection) interface{}, dataConsumer DataConsumer) *Remilia {
 	r.ensureCurrentMiddleware()
 	if r.currentMiddleware.htmlProcessor.Fn != nil {
 		r.logger.Panic("HTMLProcessor is already set for this middleware")
@@ -240,14 +248,18 @@ func (r *Remilia) Start() error {
 	r.logger.Info("Starting crawl", zap.String("url", r.URL))
 
 	urls := []string{r.URL}
-	ch := r.urlsToChannel(urls)
+	urlStream := r.urlsToChannel(urls)
 
 	for _, mw := range r.chain {
-		ch, _ = r.processURLsConcurrently(ch, mw.urlGenerator, mw.htmlProcessor)
-		// TODO: consume the content stream
+		var htmlStream <-chan interface{}
+		urlStream, htmlStream = r.processURLsConcurrently(urlStream, mw.urlGenerator, mw.htmlProcessor)
+
+		if mw.htmlProcessor.DataConsumer != nil {
+			go mw.htmlProcessor.DataConsumer(htmlStream)
+		}
 	}
 
-	for res := range ch {
+	for res := range urlStream {
 		fmt.Println("Get result at the end of chains: ", res)
 	}
 
