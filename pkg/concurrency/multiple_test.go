@@ -128,3 +128,57 @@ func TestOrDone(t *testing.T) {
 		}
 	})
 }
+
+func TestTee(t *testing.T) {
+	t.Run("send data to both outputs", func(t *testing.T) {
+		done := make(chan struct{})
+		in := make(chan int)
+		out1, out2 := Tee(done, in)
+
+		go func() {
+			in <- 1
+			close(in)
+		}()
+
+		if v := <-out1; v != 1 {
+			t.Fatalf("expected 1 from out1, got %d", v)
+		}
+		if v := <-out2; v != 1 {
+			t.Fatalf("expected 1 from out2, got %d", v)
+		}
+
+		// Ensure both channels are closed
+		_, ok1 := <-out1
+		_, ok2 := <-out2
+		if ok1 || ok2 {
+			t.Fatalf("expected both channels to be clsoed")
+		}
+	})
+
+	t.Run("stops sending data when done is closed", func(t *testing.T) {
+		done := make(chan struct{})
+		in := make(chan int)
+		out1, out2 := Tee(done, in)
+
+		go func() {
+			in <- 1
+			close(done)
+			in <- 2
+			close(in)
+		}()
+
+		if v := <-out1; v != 1 {
+			t.Fatalf("expected 1 from out1, got %d", v)
+		}
+		if v := <-out2; v != 1 {
+			t.Fatalf("expected 1 from out2, got %d", v)
+		}
+
+		// Test if values after closing done are not sent
+		_, ok1 := <-out1
+		_, ok2 := <-out2
+		if ok1 || ok2 {
+			t.Fatalf("expected both channels to be clsoed")
+		}
+	})
+}
