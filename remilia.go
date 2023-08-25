@@ -113,24 +113,38 @@ func (r *Remilia) urlsToChannel(urls []string) <-chan *url.URL {
 }
 
 // processURLsChannel reads URLs from reqURLStream, processes them, and sends the results to another channel
-func (r *Remilia) processURLsChannel(done <-chan struct{}, reqURLStream <-chan *url.URL, selector string, callback func(s *goquery.Selection) *url.URL) <-chan *url.URL {
+func (r *Remilia) processURLsChannel(
+	done <-chan struct{},
+	reqURLStream <-chan *url.URL,
+	selector string,
+	callback func(s *goquery.Selection) *url.URL,
+) (<-chan *url.URL, <-chan interface{}) {
 	// TODO: record visited url
 	urlStream := make(chan *url.URL)
+	htmlStream := make(chan interface{})
 
 	go func() {
 		defer r.logger.Info("Successfully generated URL stream")
 		defer close(urlStream)
+		defer close(htmlStream)
 
 		for reqURL := range reqURLStream {
-			r.fetchAndProcessURL(reqURL, selector, callback, done, urlStream)
+			r.fetchAndProcessURL(reqURL, selector, callback, done, urlStream, htmlStream)
 		}
 	}()
 
-	return urlStream
+	return urlStream, htmlStream
 }
 
 // fetchAndProcessURL sends a request to the given URL, parses the response, and applies the callback on the HTML content matched by the selector
-func (r *Remilia) fetchAndProcessURL(reqURL *url.URL, selector string, callback func(s *goquery.Selection) *url.URL, done <-chan struct{}, urlStream chan<- *url.URL) {
+func (r *Remilia) fetchAndProcessURL(
+	reqURL *url.URL,
+	selector string,
+	callback func(s *goquery.Selection) *url.URL,
+	done <-chan struct{},
+	urlStream chan<- *url.URL,
+	htmlStream chan<- interface{},
+) {
 	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
 
 	resp, err := http.Get(reqURL.String())
@@ -157,16 +171,19 @@ func (r *Remilia) fetchAndProcessURL(reqURL *url.URL, selector string, callback 
 }
 
 // processURLsConcurrently concurrently processes URLs using the callback and fans the results into a single channel
-func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGenerator) <-chan *url.URL {
+func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGenerator) (<-chan *url.URL, <-chan interface{}) {
 	numberOfWorkers := 5
 	done := make(chan struct{})
-	channels := make([]<-chan *url.URL, numberOfWorkers)
+	URLChannels := make([]<-chan *url.URL, numberOfWorkers)
+	HTMLChannels := make([]<-chan interface{}, numberOfWorkers)
 
 	for i := 0; i < numberOfWorkers; i++ {
-		channels[i] = r.processURLsChannel(done, input, urlGen.Selector, urlGen.Fn)
+		urlStream, htmlStream := r.processURLsChannel(done, input, urlGen.Selector, urlGen.Fn)
+		URLChannels[i] = urlStream
+		HTMLChannels[i] = htmlStream
 	}
 
-	return concurrency.FanIn(done, channels...)
+	return concurrency.FanIn(done, URLChannels...), concurrency.FanIn(done, HTMLChannels...)
 }
 
 func (r *Remilia) ensureCurrentMiddleware() {
@@ -226,7 +243,8 @@ func (r *Remilia) Start() error {
 	ch := r.urlsToChannel(urls)
 
 	for _, urlGen := range r.chain {
-		ch = r.processURLsConcurrently(ch, urlGen.urlGenerator)
+		ch, _ = r.processURLsConcurrently(ch, urlGen.urlGenerator)
+		// TODO: consume the content stream
 	}
 
 	for res := range ch {
