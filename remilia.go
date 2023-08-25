@@ -31,7 +31,7 @@ type (
 
 type Middleware struct {
 	urlGenerator  URLGenerator
-	htmlProcessor []HTMLProcessor
+	htmlProcessor HTMLProcessor
 }
 
 type Remilia struct {
@@ -187,22 +187,23 @@ func (r *Remilia) UseURL(selector string, urlGenFn func(s *goquery.Selection) *u
 		Fn:       urlGenFn,
 		Selector: selector,
 	}
-	r.currentMiddleware = &Middleware{
-		urlGenerator: newURLGenerator,
-	}
+	r.currentMiddleware.urlGenerator = newURLGenerator
 
 	return r
 }
 
 func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection), dataConsumer DataConsumer) *Remilia {
 	r.ensureCurrentMiddleware()
+	if r.currentMiddleware.htmlProcessor.Fn != nil {
+		r.logger.Panic("HTMLProcessor is already set for this middleware")
+	}
 
 	newHTMLProcessor := HTMLProcessor{
 		Fn:           htmlProcFn,
 		Selector:     selector,
 		DataConsumer: dataConsumer,
 	}
-	r.currentMiddleware.htmlProcessor = append(r.currentMiddleware.htmlProcessor, newHTMLProcessor)
+	r.currentMiddleware.htmlProcessor = newHTMLProcessor
 
 	return r
 }
