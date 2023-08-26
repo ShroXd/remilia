@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"remilia"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/ShroXd/remilia"
 )
 
 func main() {

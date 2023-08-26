@@ -1,8 +1,9 @@
 package concurrency
 
 import (
-	"remilia/pkg/utils"
 	"testing"
+
+	"github.com/ShroXd/remilia/pkg/utils"
 )
 
 var scenarios = []struct {

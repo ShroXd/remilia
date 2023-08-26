@@ -6,10 +6,11 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"remilia/pkg/concurrency"
-	"remilia/pkg/logger"
-	"remilia/pkg/network"
 	"time"
+
+	"github.com/ShroXd/remilia/pkg/concurrency"
+	"github.com/ShroXd/remilia/pkg/logger"
+	"github.com/ShroXd/remilia/pkg/network"
 
 	"github.com/PuerkitoBio/goquery"
 	"go.uber.org/zap"
