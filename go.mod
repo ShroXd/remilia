@@ -10,6 +10,6 @@ require (
 require (
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 )
