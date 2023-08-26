@@ -2,6 +2,7 @@ package remilia
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -136,6 +137,34 @@ func (r *Remilia) processURLsChannel(
 	return urlStream, htmlStream
 }
 
+func (r *Remilia) logError(msg string, reqURL *url.URL, err error) {
+	r.logger.Error(msg, zap.String("url", reqURL.String()), zap.Error(err))
+}
+
+func (r *Remilia) fetchURL(reqURL *url.URL) io.ReadCloser {
+	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
+
+	resp, err := http.Get(reqURL.String())
+	if err != nil {
+		r.logError("Failed to get a response", reqURL, err)
+		return nil
+	}
+
+	return resp.Body
+}
+
+func (r *Remilia) parseHTML(respBody io.ReadCloser, reqURL *url.URL) *goquery.Document {
+	r.logger.Debug("Parsing HTML content", zap.String("url", reqURL.String()))
+
+	doc, err := goquery.NewDocumentFromReader(respBody)
+	if err != nil {
+		r.logError("Failed to parse response body", reqURL, err)
+		return nil
+	}
+
+	return doc
+}
+
 // fetchAndProcessURL sends a request to the given URL, parses the response, and applies the callback on the HTML content matched by the selector
 func (r *Remilia) fetchAndProcessURL(
 	reqURL *url.URL,
@@ -145,18 +174,14 @@ func (r *Remilia) fetchAndProcessURL(
 	urlStream chan<- *url.URL,
 	htmlStream chan<- interface{},
 ) {
-	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
-
-	resp, err := http.Get(reqURL.String())
-	if err != nil {
-		r.logger.Error("Failed to get a response", zap.String("url", reqURL.String()), zap.Error(err))
+	respBody := r.fetchURL(reqURL)
+	if respBody == nil {
 		return
 	}
-	defer resp.Body.Close()
+	defer respBody.Close()
 
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		r.logger.Error("Failed to parse response body", zap.String("url", reqURL.String()), zap.Error(err))
+	doc := r.parseHTML(respBody, reqURL)
+	if doc == nil {
 		return
 	}
 
