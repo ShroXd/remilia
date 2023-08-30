@@ -13,7 +13,26 @@ type Logger struct {
 	internal *zap.Logger
 }
 
-func NewLogger(id, name string) (*Logger, error) {
+type LoggerConfig struct {
+	ID              string
+	Name            string
+	ConsoleLogLevel LogLevel
+	FileLogLevel    LogLevel
+}
+
+type LogLevel int8
+
+const (
+	DebugLevel LogLevel = iota - 1
+	InfoLevel
+	WarnLevel
+	ErrorLevel
+	DPanicLevel
+	PanicLevel
+	FatalLevel
+)
+
+func NewLogger(config *LoggerConfig) (*Logger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
@@ -21,7 +40,7 @@ func NewLogger(id, name string) (*Logger, error) {
 	consoleCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.AddSync(os.Stdout),
-		zapcore.DebugLevel,
+		config.ConsoleLogLevel.ToZapLevel(),
 	)
 
 	currDir, err := os.Getwd()
@@ -44,17 +63,59 @@ func NewLogger(id, name string) (*Logger, error) {
 	fileCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.AddSync(file),
-		zapcore.DebugLevel,
+		config.FileLogLevel.ToZapLevel(),
 	)
 
 	core := zapcore.NewTee(consoleCore, fileCore)
 	zlogger := zap.New(core)
 
-	scraperLogger := zlogger.With(zap.String("ID", id), zap.String("scraperName", name))
+	scraperLogger := zlogger.With(zap.String("ID", config.ID), zap.String("scraperName", config.Name))
 
 	return &Logger{
 		internal: scraperLogger,
 	}, nil
+}
+
+func (level LogLevel) ToZapLevel() zapcore.Level {
+	switch level {
+	case DebugLevel:
+		return zap.DebugLevel
+	case InfoLevel:
+		return zap.InfoLevel
+	case WarnLevel:
+		return zap.WarnLevel
+	case ErrorLevel:
+		return zap.ErrorLevel
+	case DPanicLevel:
+		return zap.DPanicLevel
+	case PanicLevel:
+		return zap.PanicLevel
+	case FatalLevel:
+		return zap.FatalLevel
+	default:
+		return zap.InfoLevel
+	}
+}
+
+func (level LogLevel) ToString() string {
+	switch level {
+	case DebugLevel:
+		return "Debug"
+	case InfoLevel:
+		return "Info"
+	case WarnLevel:
+		return "Warn"
+	case ErrorLevel:
+		return "Error"
+	case DPanicLevel:
+		return "DPanic"
+	case PanicLevel:
+		return "Panic"
+	case FatalLevel:
+		return "Fatal"
+	default:
+		return "Unknown"
+	}
 }
 
 func (l *Logger) Debug(msg string, fields ...zap.Field) {

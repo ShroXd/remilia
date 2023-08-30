@@ -7,6 +7,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
+	"github.com/ShroXd/remilia/pkg/logger"
 )
 
 func main() {
@@ -20,7 +21,11 @@ func main() {
 		}
 	}
 
-	scraper := remilia.New("https://go.dev/doc/", remilia.ConcurrentNumber(10))
+	scraper := remilia.New(
+		"https://go.dev/doc/",
+		remilia.ConcurrentNumber(10),
+		remilia.ConsoleLog(logger.ErrorLevel),
+	)
 	scraper.UseURL("h3 a", func(s *goquery.Selection) *url.URL {
 		path, _ := s.Attr("href")
 		url, _ := url.Parse("https://go.dev" + path)

@@ -3,7 +3,7 @@ package remilia
 import (
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/ShroXd/remilia/pkg/logger"
 )
 
 type Option interface {
@@ -19,7 +19,6 @@ func (f optionFunc) apply(r *Remilia) {
 // ConcurrentNumber set number of goroutines for network request
 func ConcurrentNumber(num int) Option {
 	return optionFunc(func(r *Remilia) {
-		r.logger.Debug("Apply configuration: concurrent number", zap.Int("value", num))
 		r.ConcurrentNumber = num
 	})
 }
@@ -27,7 +26,6 @@ func ConcurrentNumber(num int) Option {
 // Name set name for scraper
 func Name(name string) Option {
 	return optionFunc(func(r *Remilia) {
-		r.logger.Debug("Apply configuration: name", zap.String("value", name))
 		r.Name = name
 	})
 }
@@ -35,7 +33,6 @@ func Name(name string) Option {
 // AllowedDomains sets a string list that specifies the domains accessible to the web scraper for crawling
 func AllowedDomains(domains ...string) Option {
 	return optionFunc(func(r *Remilia) {
-		r.logger.Debug("Apply configuration: domains", zap.Any("value", domains))
 		r.AllowedDomains = domains
 	})
 }
@@ -43,7 +40,6 @@ func AllowedDomains(domains ...string) Option {
 // Delay sets sleep duration before web scraper sends request
 func Delay(delay time.Duration) Option {
 	return optionFunc(func(r *Remilia) {
-		r.logger.Debug("Apply configuration: delay", zap.Duration("value", delay))
 		r.Delay = delay
 	})
 }
@@ -51,7 +47,18 @@ func Delay(delay time.Duration) Option {
 // UserAgent sets user agent used by request
 func UserAgent(ua string) Option {
 	return optionFunc(func(r *Remilia) {
-		r.logger.Debug("Apply configuration: user agent", zap.String("value", ua))
 		r.UserAgent = ua
+	})
+}
+
+func ConsoleLog(logLevel logger.LogLevel) Option {
+	return optionFunc(func(r *Remilia) {
+		r.consoleLogLevel = logLevel
+	})
+}
+
+func FileLog(logLevel logger.LogLevel) Option {
+	return optionFunc(func(r *Remilia) {
+		r.fileLogLevel = logLevel
 	})
 }

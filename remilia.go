@@ -49,7 +49,11 @@ type Remilia struct {
 	UserAgent      string
 
 	client *network.Client
-	logger *logger.Logger
+
+	// log
+	logger          *logger.Logger
+	consoleLogLevel logger.LogLevel
+	fileLogLevel    logger.LogLevel
 
 	chain             []Middleware
 	currentMiddleware *Middleware
@@ -61,9 +65,7 @@ func New(url string, options ...Option) *Remilia {
 		ConcurrentNumber: 10,
 	}
 
-	r.init()
-
-	return r.withOptions(options...)
+	return r.withOptions(options...).init()
 }
 
 // withOptions apply options to the shallow copy of current Remilia
@@ -76,8 +78,15 @@ func (r *Remilia) withOptions(opts ...Option) *Remilia {
 }
 
 // init setup private deps
-func (r *Remilia) init() {
-	logger, err := logger.NewLogger(r.ID, r.Name)
+func (r *Remilia) init() *Remilia {
+	logConfig := &logger.LoggerConfig{
+		ID:              r.ID,
+		Name:            r.Name,
+		ConsoleLogLevel: r.consoleLogLevel,
+		FileLogLevel:    r.fileLogLevel,
+	}
+
+	logger, err := logger.NewLogger(logConfig)
 	if err != nil {
 		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		// TODO: consider is it necessary to stop entire application?
@@ -85,6 +94,8 @@ func (r *Remilia) init() {
 
 	r.logger = logger
 	r.client = network.NewClient()
+
+	return r
 }
 
 // clone function returns a shallow copy of Remilia object
