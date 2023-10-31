@@ -21,6 +21,12 @@ func main() {
 		}
 	}
 
+	// TODO:
+	// 1. use chain calling to setup the remilia instance instead of using such stupid way
+	// 2. return fn controling concurreny to user in AddToChain or other API
+	// 3. support middleware for request
+	// 4. support retry
+	// 5. support basic client configurations
 	scraper := remilia.New(
 		"https://go.dev/doc/",
 		remilia.ConcurrentNumber(10),
