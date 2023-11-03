@@ -2,8 +2,6 @@ package remilia
 
 import (
 	"time"
-
-	"github.com/ShroXd/remilia/pkg/logger"
 )
 
 type Option interface {
@@ -51,13 +49,13 @@ func UserAgent(ua string) Option {
 	})
 }
 
-func ConsoleLog(logLevel logger.LogLevel) Option {
+func ConsoleLog(logLevel LogLevel) Option {
 	return optionFunc(func(r *Remilia) {
 		r.consoleLogLevel = logLevel
 	})
 }
 
-func FileLog(logLevel logger.LogLevel) Option {
+func FileLog(logLevel LogLevel) Option {
 	return optionFunc(func(r *Remilia) {
 		r.fileLogLevel = logLevel
 	})

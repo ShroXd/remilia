@@ -7,7 +7,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
-	"github.com/ShroXd/remilia/pkg/logger"
 )
 
 func main() {
@@ -22,7 +21,6 @@ func main() {
 	}
 
 	// TODO:
-	// 1. use chain calling to setup the remilia instance instead of using such stupid way
 	// 2. return fn controling concurreny to user in AddToChain or other API
 	// 3. support middleware for request
 	// 4. support retry
@@ -30,7 +28,7 @@ func main() {
 	scraper := remilia.New(
 		"https://go.dev/doc/",
 		remilia.ConcurrentNumber(10),
-		remilia.ConsoleLog(logger.ErrorLevel),
+		remilia.ConsoleLog(remilia.ErrorLevel),
 	)
 	scraper.UseURL("h3 a", func(s *goquery.Selection) *url.URL {
 		path, _ := s.Attr("href")

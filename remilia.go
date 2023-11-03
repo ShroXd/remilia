@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/ShroXd/remilia/pkg/concurrency"
-	"github.com/ShroXd/remilia/pkg/logger"
 	"github.com/ShroXd/remilia/pkg/network"
 
 	"github.com/PuerkitoBio/goquery"
-	"go.uber.org/zap"
 	"golang.org/x/net/html/charset"
 )
 
@@ -51,9 +49,9 @@ type Remilia struct {
 	client *network.Client
 
 	// log
-	logger          *logger.Logger
-	consoleLogLevel logger.LogLevel
-	fileLogLevel    logger.LogLevel
+	logger          Logger
+	consoleLogLevel LogLevel
+	fileLogLevel    LogLevel
 
 	chain             []Middleware
 	currentMiddleware *Middleware
@@ -79,14 +77,14 @@ func (r *Remilia) withOptions(opts ...Option) *Remilia {
 
 // init setup private deps
 func (r *Remilia) init() *Remilia {
-	logConfig := &logger.LoggerConfig{
-		ID:              r.ID,
-		Name:            r.Name,
-		ConsoleLogLevel: r.consoleLogLevel,
-		FileLogLevel:    r.fileLogLevel,
+	logConfig := &LoggerConfig{
+		ID:           r.ID,
+		Name:         r.Name,
+		ConsoleLevel: r.consoleLogLevel,
+		FileLevel:    r.fileLogLevel,
 	}
 
-	logger, err := logger.NewLogger(logConfig)
+	logger, err := createLogger(logConfig)
 	if err != nil {
 		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		// TODO: consider is it necessary to stop entire application?
@@ -115,10 +113,15 @@ func (r *Remilia) urlsToChannel(urls []string) <-chan *url.URL {
 		for _, urlString := range urls {
 			parsedURL, err := url.Parse(urlString)
 			if err != nil {
-				r.logger.Error("Failed to parse url string to *url.URL", zap.String("url", urlString), zap.Error(err))
+				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
+					"url": urlString,
+					"err": err,
+				})
 			}
 
-			r.logger.Debug("Push url to channel", zap.String("url", urlString))
+			r.logger.Debug("Push url to channel", LogContext{
+				"url": urlString,
+			})
 			out <- parsedURL
 		}
 	}()
@@ -151,11 +154,16 @@ func (r *Remilia) processURLsChannel(
 }
 
 func (r *Remilia) logError(msg string, reqURL *url.URL, err error) {
-	r.logger.Error(msg, zap.String("url", reqURL.String()), zap.Error(err))
+	r.logger.Error(msg, LogContext{
+		"url": reqURL.String(),
+		"err": err,
+	})
 }
 
 func (r *Remilia) fetchURL(reqURL *url.URL) (io.ReadCloser, string) {
-	r.logger.Info("Sending request", zap.String("url", reqURL.String()))
+	r.logger.Info("Sending request", LogContext{
+		"url": reqURL.String(),
+	})
 
 	resp, err := http.Get(reqURL.String())
 	if err != nil {
@@ -167,16 +175,20 @@ func (r *Remilia) fetchURL(reqURL *url.URL) (io.ReadCloser, string) {
 }
 
 func (r *Remilia) parseHTML(respBody io.ReadCloser, contentType string, reqURL *url.URL) *goquery.Document {
-	r.logger.Debug("Parsing HTML content", zap.String("url", reqURL.String()))
+	r.logger.Debug("Parsing HTML content", LogContext{
+		"url": reqURL.String(),
+	})
 
 	bodyReader, err := charset.NewReader(respBody, contentType)
 	if err != nil {
 		r.logger.Error(
 			"Failed to convert response body",
-			zap.String("url", reqURL.String()),
-			zap.String("sourceContentType", contentType),
-			zap.String("targetContentType", "utf-8"),
-			zap.Error(err),
+			LogContext{
+				"url":               reqURL.String(),
+				"sourceContentType": contentType,
+				"targetContentType": "utf-8",
+				"err":               err,
+			},
 		)
 		return nil
 	}
@@ -210,7 +222,7 @@ func (r *Remilia) fetchAndProcessURL(
 		return
 	}
 
-	r.logger.Debug("Parsing HTML content", zap.String("url", reqURL.String()))
+	r.logger.Debug("Parsing HTML content", LogContext{"url": reqURL.String()})
 	doc.Find(urlGen.Selector).Each(func(index int, s *goquery.Selection) {
 		select {
 		case <-done:
@@ -295,7 +307,7 @@ func (r *Remilia) AddToChain() *Remilia {
 // TODO: check and compress chain
 // Start initiates the crawling process
 func (r *Remilia) Start() error {
-	r.logger.Info("Starting crawl", zap.String("url", r.URL))
+	r.logger.Info("Starting crawl", LogContext{"url": r.URL})
 
 	urls := []string{r.URL}
 	urlStream := r.urlsToChannel(urls)
