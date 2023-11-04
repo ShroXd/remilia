@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// TODO:
-	// 2. return fn controling concurreny to user in AddToChain or other API
+	// 2. return fn controling concurreny to user in End or other API
 	// 3. support middleware for request
 	// 4. support retry
 	// 5. support basic client configurations
@@ -35,9 +35,9 @@ func main() {
 		url, _ := url.Parse("https://go.dev" + path)
 
 		return url
-	}).UseHTML("h3", htmlParser, contentConsumer).AddToChain()
+	}).UseHTML("h3", htmlParser, contentConsumer).End()
 
-	scraper.UseHTML("h2", htmlParser, contentConsumer).AddToChain()
+	scraper.UseHTML("h2", htmlParser, contentConsumer).End()
 
 	err := scraper.Start()
 	if err != nil {

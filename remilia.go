@@ -298,7 +298,7 @@ func (r *Remilia) UseHTML(selector string, htmlProcFn func(s *goquery.Selection)
 	return r
 }
 
-func (r *Remilia) AddToChain() *Remilia {
+func (r *Remilia) End() *Remilia {
 	if r.currentMiddleware != nil {
 		r.chain = append(r.chain, *r.currentMiddleware)
 		r.currentMiddleware = nil
