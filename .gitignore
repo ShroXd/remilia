@@ -24,3 +24,4 @@ go.work
 logs/
 
 .vscode/
+.idea/
