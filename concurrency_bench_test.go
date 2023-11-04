@@ -1,19 +1,30 @@
-package concurrency
+package remilia
 
 import (
 	"testing"
-
-	"github.com/ShroXd/remilia/pkg/utils"
 )
+
+func GenerateData(n int) chan int {
+	out := make(chan int)
+
+	go func() {
+		defer close(out)
+		for i := 0; i < n; i++ {
+			out <- i
+		}
+	}()
+
+	return out
+}
 
 var scenarios = []struct {
 	data <-chan int
 	name string
 }{
-	{utils.GenerateData(100), "Small Data"},
-	{utils.GenerateData(1000), "Medium Data"},
-	{utils.GenerateData(10000), "Large Data"},
-	{utils.GenerateData(100000), "Huge Data"},
+	{GenerateData(100), "Small Data"},
+	{GenerateData(1000), "Medium Data"},
+	{GenerateData(10000), "Large Data"},
+	{GenerateData(100000), "Huge Data"},
 }
 
 func BenchmarkFanIn(b *testing.B) {

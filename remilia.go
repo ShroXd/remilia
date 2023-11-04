@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ShroXd/remilia/pkg/concurrency"
 	"github.com/ShroXd/remilia/pkg/network"
 	"github.com/google/uuid"
 
@@ -256,7 +255,7 @@ func (r *Remilia) processURLsConcurrently(input <-chan *url.URL, urlGen URLGener
 		HTMLChannels[i] = htmlStream
 	}
 
-	return concurrency.FanIn(done, URLChannels...), concurrency.FanIn(done, HTMLChannels...)
+	return FanIn(done, URLChannels...), FanIn(done, HTMLChannels...)
 }
 
 func (r *Remilia) ensureCurrentMiddleware() {
