@@ -1,8 +1,10 @@
 package remilia
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -102,13 +104,13 @@ func newConsoleCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) za
 	)
 }
 
-func newFileCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) (zapcore.Core, error) {
+func newFileCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
 	logDir := "logs" // Assuming logs directory is at the same level as the executable
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	logFilePath := filepath.Join(logDir, "logfile.log")
+	logFilePath := filepath.Join(logDir, fileName)
 	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -121,12 +123,17 @@ func newFileCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) (zapc
 	), nil
 }
 
+func getLogFileName(c *LoggerConfig) string {
+	timeFormat := "20060102_150405"
+	return fmt.Sprintf("%s_%s_%s.log", c.ID, c.Name, time.Now().Format(timeFormat))
+}
+
 func createLogger(c *LoggerConfig) (*DefaultLogger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	consoleCore := newConsoleCore(encoderConfig, c.ConsoleLevel.toZapLevel())
-	fileCore, err := newFileCore(encoderConfig, c.FileLevel.toZapLevel())
+	fileCore, err := newFileCore(encoderConfig, c.FileLevel.toZapLevel(), getLogFileName(c))
 	if err != nil {
 		return nil, err
 	}

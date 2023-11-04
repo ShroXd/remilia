@@ -10,6 +10,7 @@ import (
 
 	"github.com/ShroXd/remilia/pkg/concurrency"
 	"github.com/ShroXd/remilia/pkg/network"
+	"github.com/google/uuid"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
@@ -78,20 +79,22 @@ func (r *Remilia) withOptions(opts ...Option) *Remilia {
 // init setup private deps
 func (r *Remilia) init() *Remilia {
 	logConfig := &LoggerConfig{
-		ID:           r.ID,
-		Name:         r.Name,
+		ID:           GetOrDefault(&r.ID, uuid.NewString()),
+		Name:         GetOrDefault(&r.Name, "defaultName"),
 		ConsoleLevel: r.consoleLogLevel,
 		FileLevel:    r.fileLogLevel,
 	}
 
-	logger, err := createLogger(logConfig)
+	var err error
+	r.logger, err = createLogger(logConfig)
 	if err != nil {
 		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		// TODO: consider is it necessary to stop entire application?
 	}
 
-	r.logger = logger
-	r.client = network.NewClient()
+	if r.client == nil {
+		r.client = network.NewClient()
+	}
 
 	return r
 }
