@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ShroXd/remilia/pkg/network"
 	"github.com/google/uuid"
 
 	"github.com/PuerkitoBio/goquery"
@@ -46,7 +45,7 @@ type Remilia struct {
 	AllowedDomains []string
 	UserAgent      string
 
-	client *network.Client
+	client *Client
 
 	// log
 	logger          Logger
@@ -92,7 +91,7 @@ func (r *Remilia) init() *Remilia {
 	}
 
 	if r.client == nil {
-		r.client = network.NewClient()
+		r.client = NewClient()
 	}
 
 	return r
