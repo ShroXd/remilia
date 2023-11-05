@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 
 	"github.com/PuerkitoBio/goquery"
@@ -30,17 +29,17 @@ func main() {
 		remilia.ConcurrentNumber(10),
 		remilia.ConsoleLog(remilia.ErrorLevel),
 	)
-	scraper.UseURL("h3 a", func(s *goquery.Selection) *url.URL {
+	scraper.R().UseURL("h3 a", func(s *goquery.Selection) *url.URL {
 		path, _ := s.Attr("href")
 		url, _ := url.Parse("https://go.dev" + path)
 
 		return url
-	}).UseHTML("h3", htmlParser, contentConsumer).End()
+	}).UseHTML("h3", htmlParser, contentConsumer).Visit("https://www.google.com/")
 
-	scraper.UseHTML("h2", htmlParser, contentConsumer).End()
+	// scraper.R().UseHTML("h2", htmlParser, contentConsumer).Visit("https://go.dev/doc/")
 
-	err := scraper.Start()
-	if err != nil {
-		log.Print(err)
-	}
+	// err := scraper.Start()
+	// if err != nil {
+	// 	log.Print(err)
+	// }
 }

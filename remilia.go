@@ -14,26 +14,6 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-type DataConsumer func(data <-chan interface{})
-
-type (
-	URLGenerator struct {
-		Fn       func(s *goquery.Selection) *url.URL
-		Selector string
-	}
-
-	HTMLProcessor struct {
-		Fn           func(s *goquery.Selection) interface{}
-		Selector     string
-		DataConsumer DataConsumer
-	}
-)
-
-type Middleware struct {
-	urlGenerator  URLGenerator
-	htmlProcessor HTMLProcessor
-}
-
 type Remilia struct {
 	ID               string
 	URL              string
@@ -327,4 +307,10 @@ func (r *Remilia) Start() error {
 	}
 
 	return nil
+}
+
+func (r *Remilia) R() *Request {
+	return &Request{
+		logger: r.logger,
+	}
 }
