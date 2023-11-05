@@ -1,10 +1,14 @@
 package remilia
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
 type Client struct {
-	Limit Limit
-
+	BaseURL  string
+	Header   http.Header
+	Timeout  time.Duration
 	internal *http.Client
 }
 

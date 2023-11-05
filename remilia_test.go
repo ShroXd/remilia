@@ -2,7 +2,6 @@ package remilia
 
 import (
 	"testing"
-	"time"
 )
 
 func TestNew(t *testing.T) {
@@ -15,19 +14,17 @@ func TestNew(t *testing.T) {
 }
 
 func TestWithOptions(t *testing.T) {
+	AppName := "Remilia"
+
 	r := New("www.test.com")
-	r2 := r.withOptions(Delay(time.Second), AllowedDomains("test.com"))
+	r2 := r.withOptions(Name(AppName))
 
 	if r == r2 {
 		t.Errorf("Expected r and r2 to be different instances")
 	}
 
-	if r2.Delay != time.Second {
-		t.Errorf("Expected delay: %v, got %v", time.Second, r2.Delay)
-	}
-
-	if len(r2.AllowedDomains) != 1 || r2.AllowedDomains[0] != "test.com" {
-		t.Errorf("Expected AllowedDomains: ['test.com'], got: %v", r2.AllowedDomains)
+	if r2.Name != "remilia" {
+		t.Errorf("Expected name: %v, got %v", AppName, r2.Name)
 	}
 }
 
@@ -57,30 +54,5 @@ func TestName(t *testing.T) {
 
 	if r.Name != "test" {
 		t.Errorf("Expected Name: 'test', got %v", r.Name)
-	}
-}
-
-func TestAllowedDomains(t *testing.T) {
-	r := New("www.test.com").withOptions(AllowedDomains("test.com"))
-
-	if len(r.AllowedDomains) != 1 || r.AllowedDomains[0] != "test.com" {
-		t.Errorf("Expected AllowedDomains: ['test.com'], got %v", r.AllowedDomains)
-	}
-}
-
-func TestDelay(t *testing.T) {
-	r := New("www.test.com").withOptions(Delay(time.Second))
-
-	if r.Delay != time.Second {
-		t.Errorf("Expected Delay: %v, got: %v", time.Second, r.Delay)
-	}
-}
-
-func TestUserAgent(t *testing.T) {
-	fakeUserAgent := "Mozilla/5.0 (FakeOS; TestingEnvironment; NOT-REAL-BROWSER) Gecko/20100101 FakeBrowser/0.0.1 FOR-TESTING-PURPOSES-ONLY"
-	r := New("Test").withOptions(UserAgent(fakeUserAgent))
-
-	if r.UserAgent != fakeUserAgent {
-		t.Errorf("Expected UserAgent: %v, got: %v", fakeUserAgent, r.UserAgent)
 	}
 }
