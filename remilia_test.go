@@ -23,7 +23,7 @@ func TestWithOptions(t *testing.T) {
 		t.Errorf("Expected r and r2 to be different instances")
 	}
 
-	if r2.Name != "remilia" {
+	if r2.Name != "Remilia" {
 		t.Errorf("Expected name: %v, got %v", AppName, r2.Name)
 	}
 }
