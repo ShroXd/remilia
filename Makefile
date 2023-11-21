@@ -9,3 +9,7 @@ test:
 
 benchmark:
 	@go test ./... -bench . 
+
+run-mock-server:
+	@echo "Starting mock server..."
+	@go run ./mock/server.go
