@@ -18,7 +18,19 @@ func TestSetBaseURL(t *testing.T) {
 	assert.Equal(t, "http://example.com", client.BaseURL, "BaseURL should be set correctly")
 }
 
-// TODO: unit test for SetHeader
+func TestSetHeaders(t *testing.T) {
+	client := NewClient()
+	headers := map[string]string{
+		"Content-Type": "application/json",
+		"Accept":       "application/xml",
+	}
+
+	client.SetHeaders(headers)
+
+	for key, val := range headers {
+		assert.Equal(t, val, client.Header.Get(key), "Header should be set correctly")
+	}
+}
 
 func TestSetTimeout(t *testing.T) {
 	client := NewClient().SetTimeout(10 * time.Second)

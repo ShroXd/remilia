@@ -19,7 +19,10 @@ type Client struct {
 func NewClient() *Client {
 	transport := &http.Transport{}
 	c := &Client{
-		internal: &http.Client{Transport: transport},
+		Header: http.Header{},
+		internal: &http.Client{
+			Transport: transport,
+		},
 	}
 	return c
 }
@@ -29,7 +32,7 @@ func (c *Client) SetBaseURL(url string) *Client {
 	return c
 }
 
-func (c *Client) SetHeader(headers map[string]string) *Client {
+func (c *Client) SetHeaders(headers map[string]string) *Client {
 	for h, v := range headers {
 		c.Header.Set(h, v)
 	}
