@@ -314,3 +314,7 @@ func (r *Remilia) R() *Request {
 		logger: r.logger,
 	}
 }
+
+func (r *Remilia) C() *Client {
+	return r.client
+}
