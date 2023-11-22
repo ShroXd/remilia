@@ -13,6 +13,7 @@ type Client struct {
 	Timeout time.Duration
 
 	internal *http.Client
+	logger   Logger
 }
 
 func NewClient() *Client {
@@ -43,17 +44,22 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 func (c *Client) SetProxy(proxyURL string) *Client {
 	pURL, err := url.Parse(proxyURL)
 	if err != nil {
-		// TODO: log the error
+		c.logger.Error("Error parsing proxy URL", LogContext{"error": err})
 		return c
 	}
 
 	t, err := c.transport()
 	if err != nil {
-		// TODO: log the error
+		c.logger.Error("Error getting transport", LogContext{"error": err})
 		return c
 	}
 
 	t.Proxy = http.ProxyURL(pURL)
+	return c
+}
+
+func (c *Client) SetLogger(logger Logger) *Client {
+	c.logger = logger
 	return c
 }
 

@@ -41,3 +41,9 @@ func TestSetProxy(t *testing.T) {
 
 	assert.Equal(t, "http://localhost:8080", proxyURL.String(), "Proxy should be set correctly")
 }
+
+func TestSetLogger(t *testing.T) {
+	logger := &DefaultLogger{}
+	client := NewClient().SetLogger(logger)
+	assert.Equal(t, logger, client.logger, "Logger should be set correctly")
+}

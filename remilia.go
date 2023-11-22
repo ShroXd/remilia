@@ -71,7 +71,7 @@ func (r *Remilia) init() *Remilia {
 	}
 
 	if r.client == nil {
-		r.client = NewClient()
+		r.client = NewClient().SetLogger(r.logger)
 	}
 
 	return r
