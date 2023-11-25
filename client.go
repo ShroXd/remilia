@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 type (
@@ -95,6 +97,24 @@ func (c *Client) PostResponseHooks(hooks ...ResponseHook) *Client {
 }
 
 func (c *Client) Execute(request *Request) (*Response, error) {
+	c.udPreRequestHooksLock.RLock()
+	defer c.udPreRequestHooksLock.RUnlock()
+
+	c.udPostResponseHooksLock.RLock()
+	defer c.udPostResponseHooksLock.RUnlock()
+
+	for _, fn := range c.preRequestHooks {
+		if err := fn(c, request); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, fn := range c.udPreRequestHooks {
+		if err := fn(c, request); err != nil {
+			return nil, err
+		}
+	}
+
 	req, err := request.Unpack()
 	if err != nil {
 		return nil, err
@@ -106,8 +126,26 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 	}
 	defer resp.Body.Close()
 
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+
+	}
+
 	response := &Response{
 		internal: resp,
+		document: doc,
+	}
+
+	for _, fn := range c.postResponseHooks {
+		if err := fn(c, response); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, fn := range c.udPostResponseHooks {
+		if err := fn(c, response); err != nil {
+			return nil, err
+		}
 	}
 
 	return response, nil
