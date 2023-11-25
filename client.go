@@ -4,7 +4,13 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
+)
+
+type (
+	RequestHook  func(*Client, *Request) error
+	ResponseHook func(*Client, *Response) error
 )
 
 type Client struct {
@@ -12,8 +18,14 @@ type Client struct {
 	Header  http.Header
 	Timeout time.Duration
 
-	internal *http.Client
-	logger   Logger
+	internal                *http.Client
+	logger                  Logger
+	preRequestHooks         []RequestHook
+	udPreRequestHooks       []RequestHook
+	udPreRequestHooksLock   sync.RWMutex
+	postResponseHooks       []ResponseHook
+	udPostResponseHooks     []ResponseHook
+	udPostResponseHooksLock sync.RWMutex
 }
 
 func NewClient() *Client {
@@ -66,8 +78,39 @@ func (c *Client) SetLogger(logger Logger) *Client {
 	return c
 }
 
-func (c *Client) Execute(req *http.Request) (*http.Response, error) {
-	return c.internal.Do(req)
+func (c *Client) PreRequestHooks(hooks ...RequestHook) *Client {
+	c.udPreRequestHooksLock.Lock()
+	defer c.udPreRequestHooksLock.Unlock()
+
+	c.udPreRequestHooks = append(c.udPreRequestHooks, hooks...)
+	return c
+}
+
+func (c *Client) PostResponseHooks(hooks ...ResponseHook) *Client {
+	c.udPostResponseHooksLock.Lock()
+	defer c.udPostResponseHooksLock.Unlock()
+
+	c.udPostResponseHooks = append(c.udPostResponseHooks, hooks...)
+	return c
+}
+
+func (c *Client) Execute(request *Request) (*Response, error) {
+	req, err := request.Unpack()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.internal.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	response := &Response{
+		internal: resp,
+	}
+
+	return response, nil
 }
 
 func (c *Client) transport() (*http.Transport, error) {

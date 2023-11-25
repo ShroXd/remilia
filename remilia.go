@@ -14,6 +14,26 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
+type DataConsumer func(data <-chan interface{})
+
+type (
+	URLGenerator struct {
+		Fn       func(s *goquery.Selection) *url.URL
+		Selector string
+	}
+
+	HTMLProcessor struct {
+		Fn           func(s *goquery.Selection) interface{}
+		Selector     string
+		DataConsumer DataConsumer
+	}
+)
+
+type Middleware struct {
+	urlGenerator  URLGenerator
+	htmlProcessor HTMLProcessor
+}
+
 type Remilia struct {
 	ID               string
 	URL              string
@@ -36,13 +56,25 @@ type Remilia struct {
 	currentMiddleware *Middleware
 }
 
-func New(url string, options ...Option) *Remilia {
+// func New(url string, options ...Option) *Remilia {
+// 	r := &Remilia{
+// 		URL:              url,
+// 		ConcurrentNumber: 10,
+// 	}
+
+// 	return r.withOptions(options...).init()
+// }
+
+func New(client *Client, steps ...*Step) *Remilia {
 	r := &Remilia{
-		URL:              url,
-		ConcurrentNumber: 10,
+		client: client,
 	}
 
-	return r.withOptions(options...).init()
+	return r.init()
+}
+
+func C() *Client {
+	return NewClient()
 }
 
 // withOptions apply options to the shallow copy of current Remilia
@@ -307,6 +339,22 @@ func (r *Remilia) Start() error {
 	}
 
 	return nil
+}
+
+func (r *Remilia) Process(url string) (string, error) {
+	req, err := NewRequest(url)
+	if err != nil {
+		r.logger.Error("Failed to create request", LogContext{"error": err})
+	}
+
+	resp, err := r.client.Execute(req)
+	if err != nil {
+		r.logger.Error("Failed to execute request", LogContext{"error": err})
+	}
+
+	fmt.Println(resp)
+
+	return "good", nil
 }
 
 func (r *Remilia) R() *Request {
