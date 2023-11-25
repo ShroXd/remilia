@@ -14,8 +14,6 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-type DataConsumer func(data <-chan interface{})
-
 type (
 	URLGenerator struct {
 		Fn       func(s *goquery.Selection) *url.URL
@@ -52,6 +50,8 @@ type Remilia struct {
 	consoleLogLevel LogLevel
 	fileLogLevel    LogLevel
 
+	steps []*Step
+
 	chain             []Middleware
 	currentMiddleware *Middleware
 }
@@ -68,6 +68,7 @@ type Remilia struct {
 func New(client *Client, steps ...*Step) *Remilia {
 	r := &Remilia{
 		client: client,
+		steps:  steps,
 	}
 
 	return r.init()
@@ -341,18 +342,132 @@ func (r *Remilia) Start() error {
 	return nil
 }
 
+func (r *Remilia) urlsToStream(urls []string) <-chan *Request {
+	out := make(chan *Request)
+
+	go func() {
+		defer close(out)
+
+		for _, urlString := range urls {
+			req, err := NewRequest(urlString)
+			if err != nil {
+				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
+					"url": urlString,
+					"err": err,
+				})
+			}
+
+			r.logger.Debug("Push url to channel", LogContext{
+				"url": urlString,
+			})
+
+			out <- req
+		}
+	}()
+
+	return out
+}
+
+func (r *Remilia) fetchAndProcessRequest(
+	request *Request,
+	urlGen URLParser,
+	htmlProc HTMLParser,
+	done <-chan struct{},
+	urlStream chan<- *Request,
+	htmlStream chan<- interface{},
+) {
+	// respBody, ct := r.fetchURL(request)
+	// if respBody == nil || ct == "" {
+	// 	return
+	// }
+	// defer respBody.Close()
+	_, err := r.client.Execute(request)
+	if err != nil {
+		r.logError("Failed to get a response", request.URL, err)
+		return
+	}
+
+	fmt.Println("Nice")
+
+	// doc := r.parseHTML(respBody, ct, request)
+	// if doc == nil {
+	// 	return
+	// }
+
+	// r.logger.Debug("Parsing HTML content", LogContext{"url": request.String()})
+	// doc.Find(urlGen.Selector).Each(func(index int, s *goquery.Selection) {
+	// 	select {
+	// 	case <-done:
+	// 		return
+	// 	case urlStream <- urlGen.Fn(s):
+	// 	}
+	// })
+
+	// doc.Find(htmlProc.Selector).Each(func(index int, s *goquery.Selection) {
+	// 	select {
+	// 	case <-done:
+	// 		return
+	// 	case htmlStream <- htmlProc.Fn(s):
+	// 	}
+	// })
+}
+
+func (r *Remilia) processReqsChannel(
+	done <-chan struct{},
+	reqURLStream <-chan *Request,
+	urlGen URLParser,
+	htmlProc HTMLParser,
+) (<-chan *Request, <-chan interface{}) {
+	// TODO: record visited url
+	urlStream := make(chan *Request)
+	htmlStream := make(chan interface{})
+
+	fmt.Println(len(reqURLStream))
+
+	go func() {
+		defer r.logger.Info("Successfully generated Request stream")
+		defer close(urlStream)
+		defer close(htmlStream)
+
+		for reqURL := range reqURLStream {
+			r.fetchAndProcessRequest(reqURL, urlGen, htmlProc, done, urlStream, htmlStream)
+		}
+	}()
+
+	return urlStream, htmlStream
+}
+
+func (r *Remilia) processURLsConcurrentlyNice(input <-chan *Request, urlGen URLParser, htmlProc HTMLParser) (<-chan *Request, <-chan interface{}) {
+	numberOfWorkers := 5
+	done := make(chan struct{})
+	ReqChannels := make([]<-chan *Request, numberOfWorkers)
+	HTMLChannels := make([]<-chan interface{}, numberOfWorkers)
+
+	for i := 0; i < numberOfWorkers; i++ {
+		urlStream, htmlStream := r.processReqsChannel(done, input, urlGen, htmlProc)
+		ReqChannels[i] = urlStream
+		HTMLChannels[i] = htmlStream
+	}
+
+	return FanIn(done, ReqChannels...), FanIn(done, HTMLChannels...)
+}
+
 func (r *Remilia) Process(url string) (string, error) {
-	req, err := NewRequest(url)
-	if err != nil {
-		r.logger.Error("Failed to create request", LogContext{"error": err})
+	urls := []string{url}
+	urlStream := r.urlsToStream(urls)
+
+	for _, mv := range r.steps {
+		var htmlStream <-chan interface{}
+		urlStream, htmlStream = r.processURLsConcurrentlyNice(urlStream, mv.urlGenerator, mv.htmlProcessor)
+
+		if mv.dataConsumer != nil {
+			go mv.dataConsumer(htmlStream)
+		}
 	}
 
-	resp, err := r.client.Execute(req)
-	if err != nil {
-		r.logger.Error("Failed to execute request", LogContext{"error": err})
+	for res := range urlStream {
+		fmt.Println("Get result at the end of chains: ", res)
 	}
-
-	fmt.Println(resp)
 
 	return "good", nil
 }
