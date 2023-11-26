@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -50,7 +51,7 @@ type Remilia struct {
 	consoleLogLevel LogLevel
 	fileLogLevel    LogLevel
 
-	steps []*Step
+	steps []*Stage
 
 	chain             []Middleware
 	currentMiddleware *Middleware
@@ -65,7 +66,7 @@ type Remilia struct {
 // 	return r.withOptions(options...).init()
 // }
 
-func New(client *Client, steps ...*Step) *Remilia {
+func New(client *Client, steps ...*Stage) *Remilia {
 	r := &Remilia{
 		client: client,
 		steps:  steps,
@@ -193,16 +194,11 @@ func (r *Remilia) urlsToReqsStream(urls []string) <-chan *Request {
 
 func (r *Remilia) fetchAndProcessRequest(
 	request *Request,
-	step *Step,
+	step *Stage,
 	done <-chan struct{},
 	urlStream chan<- *Request,
 	htmlStream chan<- interface{},
 ) {
-	// respBody, ct := r.fetchURL(request)
-	// if respBody == nil || ct == "" {
-	// 	return
-	// }
-	// defer respBody.Close()
 	resp, err := r.client.Execute(request)
 	if err != nil {
 		r.logError("Failed to get a response", request.URL, err)
@@ -211,9 +207,11 @@ func (r *Remilia) fetchAndProcessRequest(
 
 	doc := resp.document
 
-	// Extract the content of the h1 tag
-	h1Text := doc.Find("h1").First().Text()
-	log.Printf("H1 Tag Content: %s\n", h1Text)
+	select {
+	case <-done:
+		return
+	case htmlStream <- doc:
+	}
 
 	// doc := r.parseHTML(respBody, ct, request)
 	// if doc == nil {
@@ -241,7 +239,7 @@ func (r *Remilia) fetchAndProcessRequest(
 func (r *Remilia) processReqsChannel(
 	done <-chan struct{},
 	reqURLStream <-chan *Request,
-	step *Step,
+	step *Stage,
 ) (<-chan *Request, <-chan interface{}) {
 	// TODO: record visited url
 	urlStream := make(chan *Request)
@@ -249,20 +247,67 @@ func (r *Remilia) processReqsChannel(
 
 	fmt.Println(len(reqURLStream))
 
+	// TODO: move this ctx to outside and use it in all of the goroutines, maybe let the user provide their own ctx
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out1, out2 := Tee(ctx, reqURLStream)
+
 	go func() {
 		defer r.logger.Info("Successfully generated Request stream")
-		defer close(urlStream)
 		defer close(htmlStream)
+		if step.htmlProcessor == nil {
+			return
+		}
 
-		for request := range reqURLStream {
-			r.fetchAndProcessRequest(request, step, done, urlStream, htmlStream)
+		for request := range out1 {
+			resp, err := r.client.Execute(request)
+			if err != nil {
+				r.logError("Failed to get a response", request.URL, err)
+				return
+			}
+
+			content := step.htmlProcessor(resp.document)
+
+			select {
+			case <-done:
+				return
+			case htmlStream <- content:
+			}
+		}
+	}()
+
+	go func() {
+		defer r.logger.Info("Successfully generated HTML stream")
+		defer close(urlStream)
+		if step.urlGenerator == nil {
+			return
+		}
+
+		for request := range out2 {
+			resp, err := r.client.Execute(request)
+			if err != nil {
+				r.logError("Failed to get a response", request.URL, err)
+				return
+			}
+
+			content, err := NewRequest(step.urlGenerator(resp.document))
+			if err != nil {
+				r.logError("Failed to generate request", request.URL, err)
+				return
+			}
+
+			select {
+			case <-done:
+				return
+			case urlStream <- content:
+			}
 		}
 	}()
 
 	return urlStream, htmlStream
 }
 
-func (r *Remilia) processReqsConcurrently(input <-chan *Request, step *Step) (<-chan *Request, <-chan interface{}) {
+func (r *Remilia) processReqsConcurrently(input <-chan *Request, step *Stage) (<-chan *Request, <-chan interface{}) {
 	// TODO: this should be the configuration of steps
 	numberOfWorkers := 5
 	done := make(chan struct{})
@@ -286,6 +331,7 @@ func (r *Remilia) Process(url string) (string, error) {
 		var htmlStream <-chan interface{}
 		urlStream, htmlStream = r.processReqsConcurrently(urlStream, step)
 
+		// TODO: fix the data consumer timing
 		if step.dataConsumer != nil {
 			go step.dataConsumer(htmlStream)
 		}

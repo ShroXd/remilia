@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
@@ -67,11 +68,15 @@ func main() {
 
 	// fmt.Println(string(body))
 
-	htmlParser := func(doc *goquery.Document) {
-		fmt.Println("Parser!")
+	htmlParser := func(doc *goquery.Document) interface{} {
+		h1Text := doc.Find("h1").First().Text()
+		log.Printf("H1 Tag Content: %s\n", h1Text)
+
+		return h1Text
 	}
 
 	contentConsumer := func(data <-chan interface{}) {
+		fmt.Println("In the consumer")
 		for v := range data {
 			fmt.Println("Receive data: ", v)
 		}
@@ -79,7 +84,7 @@ func main() {
 
 	c := remilia.C().SetProxy("http://127.0.0.1:8866")
 
-	step1 := remilia.NewStep(nil, htmlParser, contentConsumer)
+	step1 := remilia.NewStage(nil, htmlParser, contentConsumer)
 
 	scrapy := remilia.New(c, step1)
 	result, err := scrapy.Process("http://localhost:8080")
