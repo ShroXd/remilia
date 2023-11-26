@@ -2,8 +2,10 @@ package remilia
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 )
 
 func TestFanIn(t *testing.T) {
@@ -62,5 +64,33 @@ func TestFanIn(t *testing.T) {
 
 		out := FanIn(done, channels...)
 		assert.Equal(t, "test", <-out, "expected 'test'")
+	})
+}
+
+func TestTee(t *testing.T) {
+	t.Run("normal operation", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		in := make(chan int)
+		out1, out2 := Tee(ctx, in)
+
+		go func() {
+			in <- 1
+			close(in)
+		}()
+
+		select {
+		case v1 := <-out1:
+			assert.Equal(t, 1, v1, "expected 42")
+			select {
+			case v2 := <-out2:
+				assert.Equal(t, 1, v2, "expected 42")
+			case <-ctx.Done():
+				t.Error("Timed out waiting for value from second output channel")
+			}
+		case <-ctx.Done():
+			t.Error("Timed out waiting for value from first output channel")
+		}
 	})
 }
