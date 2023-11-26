@@ -1,27 +1,57 @@
 package remilia
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestFanIn(t *testing.T) {
+	t.Run("no channel", func(t *testing.T) {
+		done := make(chan struct{})
+		defer close(done)
+
+		out := FanIn[any](done)
+		_, open := <-out
+		assert.False(t, open, "expected output channel to be closed")
+	})
+
+	t.Run("done channel", func(t *testing.T) {
+		ch1 := make(chan string, 1)
+		ch1 <- "test"
+		close(ch1)
+
+		ch2 := make(chan string)
+		done := make(chan struct{})
+
+		out := FanIn(done, ch1, ch2)
+
+		assert.Equal(t, "test", <-out, "expected 'test'")
+
+		close(done)
+		close(ch2)
+
+		_, open := <-out
+		assert.False(t, open, "expected output channel to be closed after done was closed")
+	})
+
 	t.Run("single channel", func(t *testing.T) {
-		ch := make(chan interface{}, 1)
+		ch := make(chan string, 1)
 		ch <- "test"
 		close(ch)
 
 		done := make(chan struct{})
 		defer close(done)
 
-		out := FanIn(done, ch)
-		if got := <-out; got != "test" {
-			t.Fatalf("expected 'test', got %v", got)
-		}
+		out := FanIn[string](done, ch)
+		assert.Equal(t, "test", <-out, "expected 'test'")
 	})
 
-	t.Run("multiple channel", func(t *testing.T) {
+	t.Run("multiple channels", func(t *testing.T) {
 		num := 10
-		channels := make([]<-chan interface{}, num)
+		channels := make([]<-chan string, num)
 		for i := 0; i < num; i++ {
-			ch := make(chan interface{}, 1)
+			ch := make(chan string, 1)
 			ch <- "test"
 			close(ch)
 			channels[i] = ch
@@ -31,42 +61,6 @@ func TestFanIn(t *testing.T) {
 		defer close(done)
 
 		out := FanIn(done, channels...)
-		if got := <-out; got != "test" {
-			t.Fatalf("expected 'test', got %v", got)
-		}
-	})
-
-	t.Run("no channel", func(t *testing.T) {
-		done := make(chan struct{})
-		defer close(done)
-
-		out := FanIn[any](done)
-		_, open := <-out
-		if open {
-			t.Fatalf("expected output channel to be closed")
-		}
-	})
-
-	t.Run("done channel", func(t *testing.T) {
-		ch1 := make(chan interface{}, 1)
-		ch1 <- "test"
-		close(ch1)
-
-		ch2 := make(chan interface{})
-		done := make(chan struct{})
-
-		out := FanIn(done, ch1, ch2)
-
-		if got := <-out; got != "test" {
-			t.Fatalf("excepted 'test', got %v", got)
-		}
-
-		close(done)
-		close(ch2)
-
-		_, open := <-out
-		if open {
-			t.Fatalf("expected output channel to be closed after done was closed")
-		}
+		assert.Equal(t, "test", <-out, "expected 'test'")
 	})
 }
