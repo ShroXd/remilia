@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	_ "net/http/pprof"
+	"os"
+	"runtime/trace"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
@@ -68,6 +71,22 @@ func main() {
 
 	// fmt.Println(string(body))
 
+	f, err := os.Create("trace.out")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	err = trace.Start(f)
+	if err != nil {
+		panic(err)
+	}
+	defer trace.Stop()
+
+	urlGenerator := func(doc *goquery.Document) string {
+		return "http://localhost:8080"
+	}
+
 	htmlParser := func(doc *goquery.Document) interface{} {
 		h1Text := doc.Find("h1").First().Text()
 		log.Printf("H1 Tag Content: %s\n", h1Text)
@@ -84,14 +103,9 @@ func main() {
 
 	c := remilia.C().SetProxy("http://127.0.0.1:8866")
 
-	step1 := remilia.NewStage(nil, htmlParser, contentConsumer)
+	step1 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
+	step2 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
 
-	scrapy := remilia.New(c, step1)
-	result, err := scrapy.Process("http://localhost:8080")
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-
-	fmt.Println("Scraping result: ", result)
+	scrapy := remilia.New(c, step1, step2)
+	scrapy.Process("http://localhost:8080")
 }

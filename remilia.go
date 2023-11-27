@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -248,9 +249,9 @@ func (r *Remilia) processReqsChannel(
 	fmt.Println(len(reqURLStream))
 
 	// TODO: move this ctx to outside and use it in all of the goroutines, maybe let the user provide their own ctx
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	out1, out2 := Tee(ctx, reqURLStream)
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
+	// out1, out2 := Tee(ctx, reqURLStream)
 
 	go func() {
 		defer r.logger.Info("Successfully generated Request stream")
@@ -259,7 +260,7 @@ func (r *Remilia) processReqsChannel(
 			return
 		}
 
-		for request := range out1 {
+		for request := range reqURLStream {
 			resp, err := r.client.Execute(request)
 			if err != nil {
 				r.logError("Failed to get a response", request.URL, err)
@@ -276,33 +277,33 @@ func (r *Remilia) processReqsChannel(
 		}
 	}()
 
-	go func() {
-		defer r.logger.Info("Successfully generated HTML stream")
-		defer close(urlStream)
-		if step.urlGenerator == nil {
-			return
-		}
+	// go func() {
+	// 	defer r.logger.Info("Successfully generated HTML stream")
+	// 	defer close(urlStream)
+	// 	if step.urlGenerator == nil {
+	// 		return
+	// 	}
 
-		for request := range out2 {
-			resp, err := r.client.Execute(request)
-			if err != nil {
-				r.logError("Failed to get a response", request.URL, err)
-				return
-			}
+	// 	for request := range reqURLStream {
+	// 		resp, err := r.client.Execute(request)
+	// 		if err != nil {
+	// 			r.logError("Failed to get a response", request.URL, err)
+	// 			return
+	// 		}
 
-			content, err := NewRequest(step.urlGenerator(resp.document))
-			if err != nil {
-				r.logError("Failed to generate request", request.URL, err)
-				return
-			}
+	// 		content, err := NewRequest(step.urlGenerator(resp.document))
+	// 		if err != nil {
+	// 			r.logError("Failed to generate request", request.URL, err)
+	// 			return
+	// 		}
 
-			select {
-			case <-done:
-				return
-			case urlStream <- content:
-			}
-		}
-	}()
+	// 		select {
+	// 		case <-done:
+	// 			return
+	// 		case urlStream <- content:
+	// 		}
+	// 	}
+	// }()
 
 	return urlStream, htmlStream
 }
@@ -323,23 +324,112 @@ func (r *Remilia) processReqsConcurrently(input <-chan *Request, step *Stage) (<
 	return FanIn(done, ReqChannels...), FanIn(done, HTMLChannels...)
 }
 
-func (r *Remilia) Process(url string) (string, error) {
-	urls := []string{url}
-	urlStream := r.urlsToReqsStream(urls)
+// func (r *Remilia) Process(url string) {
+// 	urls := []string{url}
+// 	urlStream := r.urlsToReqsStream(urls)
+// 	var htmlStream <-chan interface{}
 
-	for _, step := range r.steps {
-		var htmlStream <-chan interface{}
-		urlStream, htmlStream = r.processReqsConcurrently(urlStream, step)
+// 	for _, step := range r.steps {
+// 		urlStream, htmlStream = r.processReqsConcurrently(urlStream, step)
 
-		// TODO: fix the data consumer timing
-		if step.dataConsumer != nil {
-			go step.dataConsumer(htmlStream)
+// 		// TODO: fix the data consumer timing
+// 		if step.dataConsumer != nil {
+// 			go step.dataConsumer(htmlStream)
+// 		}
+// 	}
+
+// 	// TODO: if we do not have blocker, the program will return before getting data from network request
+// 	// for res := range urlStream {
+// 	// 	fmt.Println("Get result at the end of chains: ", res)
+// 	// }
+// }
+
+func (r *Remilia) fetch(in <-chan string) <-chan *goquery.Document {
+	out := make(chan *goquery.Document)
+	go func() {
+		defer close(out)
+		for url := range in {
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Printf("Error fetching URL %s: %v\n", url, err)
+				continue
+			}
+			doc, err := goquery.NewDocumentFromReader(resp.Body)
+			if err != nil {
+				// handle error
+			}
+			out <- doc
 		}
+	}()
+	return out
+}
+
+func (c *Remilia) processStageInt(processFunc HTMLParser, in <-chan *goquery.Document) <-chan interface{} {
+	out := make(chan interface{})
+	go func() {
+		defer close(out)
+		for resp := range in {
+			result := processFunc(resp)
+			out <- result
+		}
+	}()
+	return out
+}
+
+func (c *Remilia) processStage(processFunc URLParser, in <-chan *goquery.Document) <-chan string {
+	out := make(chan string)
+	go func() {
+		defer close(out)
+		for resp := range in {
+			result := processFunc(resp)
+			out <- result
+		}
+	}()
+	return out
+}
+
+func (r *Remilia) processSingleStage(stage *Stage, in <-chan string) <-chan string {
+	fetchOutput := r.fetch(in)
+	out1, out2 := Tee(context.TODO(), fetchOutput)
+	r.processStageInt(stage.htmlProcessor, out1)
+	processOutput := r.processStage(stage.urlGenerator, out2)
+
+	return processOutput
+}
+
+func (r *Remilia) chainStages(in <-chan string) <-chan string {
+	out := in
+	for _, stage := range r.steps {
+		out = r.processSingleStage(stage, out)
 	}
 
-	for res := range urlStream {
-		fmt.Println("Get result at the end of chains: ", res)
-	}
+	return out
+}
 
-	return "good", nil
+func (r *Remilia) Process(initUrl string) {
+	urls := []string{"http://localhost:8080"}
+	in := make(chan string)
+	var wg sync.WaitGroup
+
+	finalStage := r.chainStages(in)
+
+	wg.Add(1)
+	go func() {
+		for _, url := range urls {
+			in <- url
+		}
+		close(in)
+		wg.Done()
+	}()
+
+	// Receive the output from the last stage
+	wg.Add(1)
+	go func() {
+		for n := range finalStage {
+			fmt.Println(n)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
