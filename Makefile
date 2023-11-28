@@ -2,7 +2,7 @@
 
 start:
 	#rm $(PWD)/examples/logs/logfile.log
-	cd examples && go run dev.go -race
+	cd examples && go run dev.go
 
 test:
 	@go test -cover ./...

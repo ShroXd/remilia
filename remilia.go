@@ -50,10 +50,12 @@ func (r *Remilia) withOptions(opts ...Option) *Remilia {
 // init setup private deps
 func (r *Remilia) init() *Remilia {
 	logConfig := &LoggerConfig{
-		ID:           GetOrDefault(&r.ID, uuid.NewString()),
-		Name:         GetOrDefault(&r.Name, "defaultName"),
-		ConsoleLevel: r.consoleLogLevel,
-		FileLevel:    r.fileLogLevel,
+		ID:   GetOrDefault(&r.ID, uuid.NewString()),
+		Name: GetOrDefault(&r.Name, "defaultName"),
+		// ConsoleLevel: r.consoleLogLevel,
+		// FileLevel:    r.fileLogLevel,
+		ConsoleLevel: DebugLevel,
+		FileLevel:    DebugLevel,
 	}
 
 	var err error
@@ -71,9 +73,19 @@ func (r *Remilia) init() *Remilia {
 }
 
 func (r *Remilia) fetch(in <-chan *Request) <-chan *goquery.Document {
+	r.logger.Debug("fetch", LogContext{
+		"remilia": r,
+	})
 	out := make(chan *goquery.Document)
+
+	r.wg.Add(1)
 	go func() {
 		defer close(out)
+		defer r.wg.Done()
+		defer r.logger.Debug("fetch is done", LogContext{
+			"remilia": r,
+		})
+
 		for url := range in {
 			resp, err := r.client.Execute(url)
 			if err != nil {
@@ -84,59 +96,102 @@ func (r *Remilia) fetch(in <-chan *Request) <-chan *goquery.Document {
 			out <- resp.document
 		}
 	}()
+
 	return out
 }
 
-func (c *Remilia) processStageInt(processFunc HTMLParser, in <-chan *goquery.Document) <-chan interface{} {
+func (r *Remilia) applyHTMLProcessing(processFunc HTMLParser, in <-chan *goquery.Document) <-chan interface{} {
+	r.logger.Debug("applyHTMLProcessing", LogContext{
+		"remilia": r,
+	})
 	out := make(chan interface{})
+
+	r.wg.Add(1)
 	go func() {
 		defer close(out)
+		defer r.wg.Done()
+		defer r.logger.Debug("applyHTMLProcessing is done", LogContext{
+			"remilia": r,
+		})
+
 		for resp := range in {
 			result := processFunc(resp)
 			out <- result
 		}
 	}()
+
 	return out
 }
 
-func (c *Remilia) processtage(processFunc URLParser, in <-chan *goquery.Document) <-chan *Request {
+func (r *Remilia) applyURLProcessing(processFunc URLParser, in <-chan *goquery.Document) <-chan *Request {
+	r.logger.Debug("applyURLProcessing", LogContext{
+		"remilia": r,
+	})
 	out := make(chan *Request)
+
+	r.wg.Add(1)
 	go func() {
 		defer close(out)
+		defer r.wg.Done()
+		defer r.logger.Debug("applyURLProcessing is done", LogContext{
+			"remilia": r,
+		})
+
 		for resp := range in {
 			result := processFunc(resp)
 			req, err := NewRequest(result)
 			if err != nil {
+				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
+					"url": result,
+					"err": err,
+				})
 			}
 			out <- req
+
+			r.logger.Debug("applyURLProcessing get the request", LogContext{
+				"result": result,
+			})
 		}
 	}()
+
 	return out
 }
 
-func (r *Remilia) processSingleStage(stage *Stage, in <-chan *Request) <-chan *Request {
-	fetchOutput := r.fetch(in)
-	out1, out2 := Tee(context.TODO(), fetchOutput)
-	r.processStageInt(stage.htmlProcessor, out1)
-	processOutput := r.processtage(stage.urlGenerator, out2)
+func (r *Remilia) runStage(ctx context.Context, stage *Stage, reqs <-chan *Request) <-chan *Request {
+	fetchOutput := r.fetch(reqs)
+	// _, out2 := Tee(ctx, fetchOutput, &sync.WaitGroup{})
 
-	return processOutput
+	var requestStream <-chan *Request
+
+	requestStream = r.applyURLProcessing(stage.urlGenerator, fetchOutput)
+	// r.applyHTMLProcessing(stage.htmlProcessor, out1)
+
+	return requestStream
 }
 
-func (r *Remilia) chainStages(in <-chan *Request) <-chan *Request {
-	out := in
+func (r *Remilia) chainStages(ctx context.Context, rs <-chan *Request) {
 	for _, stage := range r.steps {
-		out = r.processSingleStage(stage, out)
+		rs = r.runStage(ctx, stage, rs)
 	}
 
-	return out
+	// TODO: the last stage should not generate url
+	<-rs
 }
 
 func (r *Remilia) StreamUrls(ctx context.Context, urls []string) <-chan *Request {
+	r.logger.Debug("StreamUrls", LogContext{
+		"remilia": r,
+	})
+
 	out := make(chan *Request)
 
+	r.wg.Add(1)
 	go func() {
 		defer close(out)
+		defer r.wg.Done()
+		defer r.logger.Debug("StreamUrls is done", LogContext{
+			"remilia": r,
+		})
 
 		for _, urlString := range urls {
 			req, err := NewRequest(urlString)
@@ -163,21 +218,7 @@ func (r *Remilia) Wait() {
 	r.wg.Wait()
 }
 
-func (r *Remilia) Process(initUrl string) {
-	urls := r.StreamUrls(context.TODO(), []string{initUrl})
-
-	var wg sync.WaitGroup
-
-	finalStage := r.chainStages(urls)
-
-	// Receive the output from the last stage
-	wg.Add(1)
-	go func() {
-		for n := range finalStage {
-			fmt.Println(n)
-		}
-		wg.Done()
-	}()
-
-	wg.Wait()
+func (r *Remilia) Process(initUrl string, ctx context.Context) {
+	urls := r.StreamUrls(ctx, []string{initUrl})
+	r.chainStages(ctx, urls)
 }

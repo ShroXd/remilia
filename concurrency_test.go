@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -69,11 +70,12 @@ func TestFanIn(t *testing.T) {
 
 func TestTee(t *testing.T) {
 	t.Run("normal operation", func(t *testing.T) {
+		var wg sync.WaitGroup
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		in := make(chan int)
-		out1, out2 := Tee(ctx, in)
+		out1, out2 := Tee(ctx, in, &wg)
 
 		go func() {
 			in <- 1

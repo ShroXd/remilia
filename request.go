@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -14,10 +15,13 @@ type Request struct {
 func NewRequest(urlString string) (*Request, error) {
 	req, err := http.NewRequest("GET", urlString, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	parsedURL, _ := url.Parse(urlString)
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse url: %w", err)
+	}
 
 	return &Request{
 		internal: req,

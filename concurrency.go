@@ -53,14 +53,21 @@ func orDone[T any](c <-chan T) <-chan T {
 	return valStream
 }
 
-func Tee[T any](ctx context.Context, in <-chan T) (<-chan T, <-chan T) {
+func Tee[T any](ctx context.Context, input <-chan T, wg *sync.WaitGroup) (<-chan T, <-chan T) {
 	out1 := make(chan T)
 	out2 := make(chan T)
+
+	if wg != nil {
+		wg.Add(1)
+	}
 	go func() {
 		defer close(out1)
 		defer close(out2)
+		if wg != nil {
+			defer wg.Done()
+		}
 
-		for val := range orDone[T](in) {
+		for val := range input {
 			var out1, out2 = out1, out2
 			for i := 0; i < 2; i++ {
 				select {
