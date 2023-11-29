@@ -157,25 +157,37 @@ func (r *Remilia) applyURLProcessing(processFunc URLParser, in <-chan *goquery.D
 	return out
 }
 
-func (r *Remilia) runStage(ctx context.Context, stage *Stage, reqs <-chan *Request) <-chan *Request {
-	fetchOutput := r.fetch(reqs)
-	// _, out2 := Tee(ctx, fetchOutput, &sync.WaitGroup{})
+func (r *Remilia) runStage(ctx context.Context, stage *Stage, inRequestStream <-chan *Request) (<-chan *Request, <-chan interface{}) {
+	fetchOutput := r.fetch(inRequestStream)
+	out1, out2 := Tee(ctx, fetchOutput, &sync.WaitGroup{})
 
-	var requestStream <-chan *Request
+	var outRequestStream <-chan *Request
 
-	requestStream = r.applyURLProcessing(stage.urlGenerator, fetchOutput)
-	// r.applyHTMLProcessing(stage.htmlProcessor, out1)
+	if stage.urlGenerator != nil {
+		outRequestStream = r.applyURLProcessing(stage.urlGenerator, out1)
+	} else {
+		// TODO: find elegant way to handle the case that the stage doesn't have urlGenerator
+		go func() {
+			for range out1 {
+			}
+		}()
+	}
+	htmlStream := r.applyHTMLProcessing(stage.htmlProcessor, out2)
 
-	return requestStream
+	return outRequestStream, htmlStream
 }
 
-func (r *Remilia) chainStages(ctx context.Context, rs <-chan *Request) {
+func (r *Remilia) chainStages(ctx context.Context, requestStream <-chan *Request) {
 	for _, stage := range r.steps {
-		rs = r.runStage(ctx, stage, rs)
-	}
+		var htmlStream <-chan interface{}
+		requestStream, htmlStream = r.runStage(ctx, stage, requestStream)
 
-	// TODO: the last stage should not generate url
-	<-rs
+		r.wg.Add(1)
+		go func(currentStage *Stage) {
+			defer r.wg.Done()
+			currentStage.dataConsumer(htmlStream)
+		}(stage)
+	}
 }
 
 func (r *Remilia) StreamUrls(ctx context.Context, urls []string) <-chan *Request {
@@ -219,6 +231,7 @@ func (r *Remilia) Wait() {
 }
 
 func (r *Remilia) Process(initUrl string, ctx context.Context) {
+	// TODO: should return the error channel
 	urls := r.StreamUrls(ctx, []string{initUrl})
 	r.chainStages(ctx, urls)
 }

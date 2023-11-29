@@ -22,3 +22,11 @@ func NewStage(urlGenerator URLParser, htmlProcessor HTMLParser, dataConsumer Dat
 		dataConsumer:  dataConsumer,
 	}
 }
+
+// TODO: should ganruate the final stage doesn't have urlGenerator
+func NewFinalStage(htmlProcessor HTMLParser, dataConsumer DataConsumer) *Stage {
+	return &Stage{
+		htmlProcessor: htmlProcessor,
+		dataConsumer:  dataConsumer,
+	}
+}

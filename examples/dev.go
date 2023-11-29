@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime/trace"
@@ -83,8 +85,13 @@ func main() {
 	}
 	defer trace.Stop()
 
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	urlGenerator := func(doc *goquery.Document) string {
 		return "http://localhost:8080"
+		// return ""
 	}
 
 	htmlParser := func(doc *goquery.Document) interface{} {
@@ -105,7 +112,13 @@ func main() {
 
 	step1 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
 	step2 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
+	step3 := remilia.NewFinalStage(htmlParser, contentConsumer)
 
-	scrapy := remilia.New(c, step1, step2)
-	scrapy.Process("http://localhost:8080")
+	scrapy := remilia.New(c, step1, step2, step3)
+	scrapy.Process("http://localhost:8080", context.TODO())
+
+	// TODO: only need to wait for urlGenerator
+	// the scrapy need the new url to run the pipeline
+	// but the data consumer and html parser should be controled by user
+	scrapy.Wait()
 }
