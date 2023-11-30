@@ -80,11 +80,13 @@ func (r *Remilia) fetch(in <-chan *Request) <-chan *goquery.Document {
 
 	r.wg.Add(1)
 	go func() {
-		defer close(out)
-		defer r.wg.Done()
-		defer r.logger.Debug("fetch is done", LogContext{
-			"remilia": r,
-		})
+		defer func() {
+			close(out)
+			r.wg.Done()
+			r.logger.Debug("fetch is done", LogContext{
+				"remilia": r,
+			})
+		}()
 
 		for url := range in {
 			resp, err := r.client.Execute(url)
@@ -108,11 +110,13 @@ func (r *Remilia) applyHTMLProcessing(processFunc HTMLParser, in <-chan *goquery
 
 	r.wg.Add(1)
 	go func() {
-		defer close(out)
-		defer r.wg.Done()
-		defer r.logger.Debug("applyHTMLProcessing is done", LogContext{
-			"remilia": r,
-		})
+		defer func() {
+			close(out)
+			r.wg.Done()
+			r.logger.Debug("applyHTMLProcessing is done", LogContext{
+				"remilia": r,
+			})
+		}()
 
 		for resp := range in {
 			result := processFunc(resp)
@@ -131,11 +135,13 @@ func (r *Remilia) applyURLProcessing(processFunc URLParser, in <-chan *goquery.D
 
 	r.wg.Add(1)
 	go func() {
-		defer close(out)
-		defer r.wg.Done()
-		defer r.logger.Debug("applyURLProcessing is done", LogContext{
-			"remilia": r,
-		})
+		defer func() {
+			close(out)
+			r.wg.Done()
+			r.logger.Debug("applyURLProcessing is done", LogContext{
+				"remilia": r,
+			})
+		}()
 
 		for resp := range in {
 			result := processFunc(resp)
@@ -199,11 +205,13 @@ func (r *Remilia) StreamUrls(ctx context.Context, urls []string) <-chan *Request
 
 	r.wg.Add(1)
 	go func() {
-		defer close(out)
-		defer r.wg.Done()
-		defer r.logger.Debug("StreamUrls is done", LogContext{
-			"remilia": r,
-		})
+		defer func() {
+			close(out)
+			r.wg.Done()
+			r.logger.Debug("StreamUrls is done", LogContext{
+				"remilia": r,
+			})
+		}()
 
 		for _, urlString := range urls {
 			req, err := NewRequest(urlString)
