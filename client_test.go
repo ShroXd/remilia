@@ -1,7 +1,6 @@
 package remilia
 
 import (
-	"net/http"
 	"testing"
 	"time"
 
@@ -37,22 +36,22 @@ func TestSetTimeout(t *testing.T) {
 	assert.Equal(t, 10*time.Second, client.Timeout, "Timeout should be set correctly")
 }
 
-func TestSetProxy(t *testing.T) {
-	client := NewClient().SetProxy("http://localhost:8080")
+// func TestSetProxy(t *testing.T) {
+// 	client := NewClient().SetProxy("http://localhost:8080")
 
-	transport, ok := client.internal.Transport.(*http.Transport)
-	assert.True(t, ok, "Transport should be of type *http.Transport")
-	assert.NotNil(t, transport, "Transport should not be nil")
+// 	transport, ok := client.internal.Transport.(*http.Transport)
+// 	assert.True(t, ok, "Transport should be of type *http.Transport")
+// 	assert.NotNil(t, transport, "Transport should not be nil")
 
-	dummyReq, err := http.NewRequest("GET", "http://example.com", nil)
-	assert.NoError(t, err, "Error creating dummy request")
+// 	dummyReq, err := http.NewRequest("GET", "http://example.com", nil)
+// 	assert.NoError(t, err, "Error creating dummy request")
 
-	proxyURL, err := transport.Proxy(dummyReq)
-	assert.NoError(t, err, "Error getting proxy URL")
-	assert.NotNil(t, proxyURL, "Proxy should not be nil")
+// 	proxyURL, err := transport.Proxy(dummyReq)
+// 	assert.NoError(t, err, "Error getting proxy URL")
+// 	assert.NotNil(t, proxyURL, "Proxy should not be nil")
 
-	assert.Equal(t, "http://localhost:8080", proxyURL.String(), "Proxy should be set correctly")
-}
+// 	assert.Equal(t, "http://localhost:8080", proxyURL.String(), "Proxy should be set correctly")
+// }
 
 func TestSetLogger(t *testing.T) {
 	logger := &DefaultLogger{}

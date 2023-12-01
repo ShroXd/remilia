@@ -1,34 +1,42 @@
 package remilia
 
 import (
-	"fmt"
-	"net/http"
-	"net/url"
+	"github.com/valyala/fasthttp"
 )
 
+type Build[T any] interface {
+	Build() T
+}
+
+type Option interface {
+	apply(*Request)
+}
+
+type optionFunc func(*Request)
+
+func (f optionFunc) apply(req *Request) {
+	f(req)
+}
+
 type Request struct {
-	URL      *url.URL
-	internal *http.Request
-	logger   Logger
+	URL    string
+	logger Logger
+
+	options []optionFunc
 }
 
 func NewRequest(urlString string) (*Request, error) {
-	req, err := http.NewRequest("GET", urlString, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
-	}
-
 	return &Request{
-		internal: req,
-		URL:      parsedURL,
+		URL:     urlString,
+		options: []optionFunc{},
 	}, nil
 }
 
-func (req *Request) Unpack() (*http.Request, error) {
-	return req.internal, nil
+func (req *Request) Build() *fasthttp.Request {
+	r := fasthttp.AcquireRequest()
+	for _, f := range req.options {
+		f(req)
+	}
+
+	return r
 }

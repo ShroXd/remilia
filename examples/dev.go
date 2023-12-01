@@ -108,7 +108,7 @@ func main() {
 		}
 	}
 
-	c := remilia.C().SetProxy("http://127.0.0.1:8866")
+	c := remilia.C()
 
 	step1 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
 	step2 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)

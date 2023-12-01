@@ -39,14 +39,6 @@ func C() *Client {
 	return NewClient()
 }
 
-// withOptions apply options to the shallow copy of current Remilia
-func (r *Remilia) withOptions(opts ...Option) *Remilia {
-	for _, opt := range opts {
-		opt.apply(r)
-	}
-	return r
-}
-
 // init setup private deps
 func (r *Remilia) init() *Remilia {
 	logConfig := &LoggerConfig{

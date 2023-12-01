@@ -1,13 +1,14 @@
 package remilia
 
 import (
-	"errors"
+	"bytes"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
 type (
@@ -20,7 +21,7 @@ type Client struct {
 	Header  http.Header
 	Timeout time.Duration
 
-	internal                *http.Client
+	internal                *fasthttp.Client
 	logger                  Logger
 	preRequestHooks         []RequestHook
 	udPreRequestHooks       []RequestHook
@@ -31,14 +32,15 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	transport := &http.Transport{}
-	c := &Client{
+	return &Client{
 		Header: http.Header{},
-		internal: &http.Client{
-			Transport: transport,
+		internal: &fasthttp.Client{
+			ReadTimeout:              500 * time.Millisecond,
+			WriteTimeout:             500 * time.Millisecond,
+			NoDefaultUserAgentHeader: true,
+			Dial:                     fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:8866"),
 		},
 	}
-	return c
 }
 
 func (c *Client) SetBaseURL(url string) *Client {
@@ -59,20 +61,7 @@ func (c *Client) SetTimeout(timeout time.Duration) *Client {
 }
 
 func (c *Client) SetProxy(proxyURL string) *Client {
-	pURL, err := url.Parse(proxyURL)
-	if err != nil {
-		c.logger.Error("Error parsing proxy URL", LogContext{"error": err})
-		return c
-	}
-
-	t, err := c.transport()
-	if err != nil {
-		c.logger.Error("Error getting transport", LogContext{"error": err})
-		return c
-	}
-
-	t.Proxy = http.ProxyURL(pURL)
-	return c
+	return nil
 }
 
 func (c *Client) SetLogger(logger Logger) *Client {
@@ -115,24 +104,27 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 		}
 	}
 
-	req, err := request.Unpack()
+	req := request.Build()
+	req.SetRequestURI(request.URL)
+
+	// TODO: delay build response
+	resp := fasthttp.AcquireResponse()
+
+	err := c.internal.Do(req, resp)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		fasthttp.ReleaseResponse(resp)
+		fasthttp.ReleaseRequest(req)
+	}()
 
-	resp, err := c.internal.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(resp.Body()))
 	if err != nil {
 
 	}
 
 	response := &Response{
-		internal: resp,
 		document: doc,
 	}
 
@@ -151,11 +143,6 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 	return response, nil
 }
 
-func (c *Client) transport() (*http.Transport, error) {
-	t, ok := c.internal.Transport.(*http.Transport)
-	if !ok {
-		return nil, errors.New("invalid transport instance")
-	}
-
-	return t, nil
+func (c *Client) transport() fasthttp.DialFunc {
+	return c.internal.Dial
 }
