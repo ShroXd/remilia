@@ -58,8 +58,9 @@ func (r *Remilia) init() *Remilia {
 	}
 
 	if r.client == nil {
-		r.client = NewClient().SetLogger(r.logger)
+		r.client = NewClient()
 	}
+	r.client.SetLogger(r.logger)
 
 	return r
 }
@@ -137,6 +138,10 @@ func (r *Remilia) applyURLProcessing(processFunc URLParser, in <-chan *goquery.D
 
 		for resp := range in {
 			result := processFunc(resp)
+			// TODO: handle the none url from user defined function
+			if result == "" {
+				continue
+			}
 			req, err := NewRequest(result)
 			if err != nil {
 				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
@@ -162,6 +167,9 @@ func (r *Remilia) runStage(ctx context.Context, stage *Stage, inRequestStream <-
 	var outRequestStream <-chan *Request
 
 	if stage.urlGenerator != nil {
+		r.logger.Debug("runStage with urlGenerator", LogContext{
+			"remilia": r,
+		})
 		outRequestStream = r.applyURLProcessing(stage.urlGenerator, out1)
 	} else {
 		// TODO: find elegant way to handle the case that the stage doesn't have urlGenerator

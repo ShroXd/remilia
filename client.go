@@ -35,10 +35,11 @@ func NewClient() *Client {
 	return &Client{
 		Header: http.Header{},
 		internal: &fasthttp.Client{
-			ReadTimeout:              500 * time.Millisecond,
-			WriteTimeout:             500 * time.Millisecond,
+			ReadTimeout:              10 * time.Second,
+			WriteTimeout:             10 * time.Second,
 			NoDefaultUserAgentHeader: true,
-			Dial:                     fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:8866"),
+			// TODO: figure out how to set timeout for TCP connection
+			Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
 		},
 	}
 }
@@ -112,6 +113,9 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 
 	err := c.internal.Do(req, resp)
 	if err != nil {
+		c.logger.Error("Failed to execute request", LogContext{
+			"err": err,
+		})
 		return nil, err
 	}
 	defer func() {
