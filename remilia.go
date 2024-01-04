@@ -1,51 +1,34 @@
 package remilia
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"sync"
-
-	"github.com/google/uuid"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/google/uuid"
 )
 
-type Remilia struct {
-	ID               string
-	URL              string
-	Name             string
-	ConcurrentNumber int
+type Remilia[T any] struct {
+	ID   string
+	Name string
 
-	client          *Client
-	steps           []*Stage
-	wg              *sync.WaitGroup
-	logger          Logger
-	consoleLogLevel LogLevel
-	fileLogLevel    LogLevel
+	pipeline pipeline[any]
+	client   *Client
+	logger   Logger
 }
 
-func New(client *Client, steps ...*Stage) *Remilia {
-	r := &Remilia{
-		client: client,
-		steps:  steps,
-		wg:     &sync.WaitGroup{},
+func New() *Remilia[any] {
+	r := &Remilia[any]{
+		client: NewClient(),
 	}
 
-	return r.init()
+	r.init()
+	return r
 }
 
-func C() *Client {
-	return NewClient()
-}
-
-// init setup private deps
-func (r *Remilia) init() *Remilia {
+func (r *Remilia[T]) init() {
 	logConfig := &LoggerConfig{
-		ID:   GetOrDefault(&r.ID, uuid.NewString()),
-		Name: GetOrDefault(&r.Name, "defaultName"),
-		// ConsoleLevel: r.consoleLogLevel,
-		// FileLevel:    r.fileLogLevel,
+		ID:           GetOrDefault(&r.ID, uuid.NewString()),
+		Name:         GetOrDefault(&r.Name, "defaultName"),
 		ConsoleLevel: DebugLevel,
 		FileLevel:    DebugLevel,
 	}
@@ -54,192 +37,49 @@ func (r *Remilia) init() *Remilia {
 	r.logger, err = createLogger(logConfig)
 	if err != nil {
 		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
-		// TODO: consider is it necessary to stop entire application?
 	}
 
 	if r.client == nil {
 		r.client = NewClient()
 	}
 	r.client.SetLogger(r.logger)
-
-	return r
 }
 
-func (r *Remilia) fetch(in <-chan *Request) <-chan *goquery.Document {
-	r.logger.Debug("fetch", LogContext{
-		"remilia": r,
-	})
-	out := make(chan *goquery.Document)
-
-	r.wg.Add(1)
-	go func() {
-		defer func() {
-			close(out)
-			r.wg.Done()
-			r.logger.Debug("fetch is done", LogContext{
-				"remilia": r,
-			})
-		}()
-
-		for url := range in {
-			resp, err := r.client.Execute(url)
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-				continue
-				// handle error
-			}
-			out <- resp.document
+func (r *Remilia[T]) Just(urlStr string) ProducerDef[*Request] {
+	producerFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+		// TODO: we should put the response
+		req, err := NewRequest(urlStr)
+		if err != nil {
+			return err
 		}
-	}()
-
-	return out
-}
-
-func (r *Remilia) applyHTMLProcessing(processFunc HTMLParser, in <-chan *goquery.Document) <-chan interface{} {
-	r.logger.Debug("applyHTMLProcessing", LogContext{
-		"remilia": r,
-	})
-	out := make(chan interface{})
-
-	r.wg.Add(1)
-	go func() {
-		defer func() {
-			close(out)
-			r.wg.Done()
-			r.logger.Debug("applyHTMLProcessing is done", LogContext{
-				"remilia": r,
-			})
-		}()
-
-		for resp := range in {
-			result := processFunc(resp)
-			out <- result
-		}
-	}()
-
-	return out
-}
-
-func (r *Remilia) applyURLProcessing(processFunc URLParser, in <-chan *goquery.Document) <-chan *Request {
-	r.logger.Debug("applyURLProcessing", LogContext{
-		"remilia": r,
-	})
-	out := make(chan *Request)
-
-	r.wg.Add(1)
-	go func() {
-		defer func() {
-			close(out)
-			r.wg.Done()
-			r.logger.Debug("applyURLProcessing is done", LogContext{
-				"remilia": r,
-			})
-		}()
-
-		for resp := range in {
-			result := processFunc(resp)
-			// TODO: handle the none url from user defined function
-			if result == "" {
-				continue
-			}
-			req, err := NewRequest(result)
-			if err != nil {
-				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
-					"url": result,
-					"err": err,
-				})
-			}
-			out <- req
-
-			r.logger.Debug("applyURLProcessing get the request", LogContext{
-				"result": result,
-			})
-		}
-	}()
-
-	return out
-}
-
-func (r *Remilia) runStage(ctx context.Context, stage *Stage, inRequestStream <-chan *Request) (<-chan *Request, <-chan interface{}) {
-	fetchOutput := r.fetch(inRequestStream)
-	out1, out2 := Tee(ctx, fetchOutput, &sync.WaitGroup{})
-
-	var outRequestStream <-chan *Request
-
-	if stage.urlGenerator != nil {
-		r.logger.Debug("runStage with urlGenerator", LogContext{
-			"remilia": r,
-		})
-		outRequestStream = r.applyURLProcessing(stage.urlGenerator, out1)
-	} else {
-		// TODO: find elegant way to handle the case that the stage doesn't have urlGenerator
-		go func() {
-			for range out1 {
-			}
-		}()
+		put(req)
+		return nil
 	}
-	htmlStream := r.applyHTMLProcessing(stage.htmlProcessor, out2)
 
-	return outRequestStream, htmlStream
+	return NewProducer[*Request](producerFn)
 }
 
-func (r *Remilia) chainStages(ctx context.Context, requestStream <-chan *Request) {
-	for _, stage := range r.steps {
-		var htmlStream <-chan interface{}
-		requestStream, htmlStream = r.runStage(ctx, stage, requestStream)
-
-		r.wg.Add(1)
-		go func(currentStage *Stage) {
-			defer r.wg.Done()
-			currentStage.dataConsumer(htmlStream)
-		}(stage)
-	}
-}
-
-func (r *Remilia) StreamUrls(ctx context.Context, urls []string) <-chan *Request {
-	r.logger.Debug("StreamUrls", LogContext{
-		"remilia": r,
-	})
-
-	out := make(chan *Request)
-
-	r.wg.Add(1)
-	go func() {
-		defer func() {
-			close(out)
-			r.wg.Done()
-			r.logger.Debug("StreamUrls is done", LogContext{
-				"remilia": r,
+func (r *Remilia[T]) Sink(fn func(in *goquery.Document) error) StageDef[*Request] {
+	wrappedFn := func(in *Request) (*Request, error) {
+		resp, err := r.client.Execute(in)
+		if err != nil {
+			r.logger.Error("Failed to execute request", LogContext{
+				"err": err,
 			})
-		}()
-
-		for _, urlString := range urls {
-			req, err := NewRequest(urlString)
-			if err != nil {
-				r.logger.Error("Failed to parse url string to *url.URL", LogContext{
-					"url": urlString,
-					"err": err,
-				})
-				continue
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case out <- req:
-			}
 		}
-	}()
+		fn(resp.document)
 
-	return out
+		// TODO: temp for testing
+		return NewRequest("www.google.com")
+	}
+	return NewStage[*Request](wrappedFn)
 }
 
-func (r *Remilia) Wait() {
-	r.wg.Wait()
-}
+func (r *Remilia[T]) Do(producerDef ProducerDef[*Request], stageDefs ...StageDef[*Request]) error {
+	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)
+	if err != nil {
+		return err
+	}
 
-func (r *Remilia) Process(initUrl string, ctx context.Context) {
-	// TODO: should return the error channel
-	urls := r.StreamUrls(ctx, []string{initUrl})
-	r.chainStages(ctx, urls)
+	return pipeline.execute()
 }

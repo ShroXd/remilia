@@ -1,5 +1,8 @@
 package remilia
 
+// 1. recyling put
+// 2. stage network request fn
+
 type stageOptions struct {
 	name            string
 	concurrency     uint
@@ -53,14 +56,17 @@ func (cs commonStage[T]) concurrency() uint {
 	return cs.opts.concurrency
 }
 
+type Put[T any] func(T)
+type Get[T any] func() T
+
 // TODO: add getter for cycling pipeline
-type ProducerFn[T any] func(put func(T)) error
-type Producer[T any] func() (*producer[T], error)
+type ProducerFn[T any] func(get Get[T], put Put[T], chew Put[T]) error
+type ProducerDef[T any] func() (*producer[T], error)
 
 type producer[T any] struct {
 	commonStage[T]
 	fn     ProducerFn[T]
-	getter func() (T, bool)
+	getter func() T
 }
 
 func buildProducer[T any](fn ProducerFn[T], opts *stageOptions) *producer[T] {
@@ -71,14 +77,14 @@ func buildProducer[T any](fn ProducerFn[T], opts *stageOptions) *producer[T] {
 		},
 		fn: fn,
 	}
-	// TODO: only work for recycling
-	p.getter = func() (T, bool) {
-		return <-p.inCh, false
+
+	p.getter = func() T {
+		return <-p.inCh
 	}
 	return p
 }
 
-func NewProducer[T any](fn ProducerFn[T], optFns ...StageOptionFn) Producer[T] {
+func NewProducer[T any](fn ProducerFn[T], optFns ...StageOptionFn) ProducerDef[T] {
 	return func() (*producer[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
@@ -90,13 +96,18 @@ func NewProducer[T any](fn ProducerFn[T], optFns ...StageOptionFn) Producer[T] {
 }
 
 func (p *producer[T]) execute() error {
-	return p.fn(func(v T) {
+	put := func(v T) {
 		p.outCh <- v
-	})
+	}
+	chew := func(v T) {
+		p.inCh <- v
+	}
+
+	return p.fn(p.getter, put, chew)
 }
 
 type StageFn[T any] func(in T) (out T, err error)
-type Stage[T any] func() (*stage[T], error)
+type StageDef[T any] func() (*stage[T], error)
 
 type stage[T any] struct {
 	commonStage[T]
@@ -113,7 +124,7 @@ func buildStage[T any](fn StageFn[T], opts *stageOptions) *stage[T] {
 	}
 }
 
-func NewStage[T any](fn StageFn[T], optFns ...StageOptionFn) Stage[T] {
+func NewStage[T any](fn StageFn[T], optFns ...StageOptionFn) StageDef[T] {
 	return func() (*stage[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {

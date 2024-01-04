@@ -7,7 +7,7 @@ type pipeline[T any] struct {
 	stages   []*stage[T]
 }
 
-func newPipeline[T any](producerDef Producer[T], stageDefs ...Stage[T]) (*pipeline[T], error) {
+func newPipeline[T any](producerDef ProducerDef[T], stageDefs ...StageDef[T]) (*pipeline[T], error) {
 	p := &pipeline[T]{}
 	var err error
 
@@ -35,7 +35,7 @@ func newPipeline[T any](producerDef Producer[T], stageDefs ...Stage[T]) (*pipeli
 	}
 
 	// TODO: support recycling pipeline
-	// lastStage.outCh = p.producer.inCh
+	lastStage.outCh = p.producer.inCh
 
 	return p, nil
 }
@@ -49,6 +49,15 @@ func (p *pipeline[T]) execute() error {
 	}
 
 	return eg.Wait()
+}
+
+func Execute(producerDef ProducerDef[any], stageDef ...StageDef[any]) error {
+	pipeline, err := newPipeline[any](producerDef, stageDef...)
+	if err != nil {
+		return err
+	}
+
+	return pipeline.execute()
 }
 
 type executor interface {

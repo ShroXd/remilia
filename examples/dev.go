@@ -1,13 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"net/http"
 	_ "net/http/pprof"
-	"os"
-	"runtime/trace"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
@@ -73,52 +68,69 @@ func main() {
 
 	// fmt.Println(string(body))
 
-	f, err := os.Create("trace.out")
-	if err != nil {
-		panic(err)
+	// f, err := os.Create("trace.out")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer f.Close()
+
+	// err = trace.Start(f)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// defer trace.Stop()
+
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
+
+	// urlGenerator := func(doc *goquery.Document) string {
+	// 	return "http://localhost:8080"
+	// 	// return ""
+	// }
+
+	// htmlParser := func(doc *goquery.Document) interface{} {
+	// 	h1Text := doc.Find("h1").First().Text()
+	// 	log.Printf("H1 Tag Content: %s\n", h1Text)
+
+	// 	return h1Text
+	// }
+
+	// contentConsumer := func(data <-chan interface{}) {
+	// 	fmt.Println("In the consumer")
+	// 	for v := range data {
+	// 		fmt.Println("Receive data: ", v)
+	// 	}
+	// }
+
+	// c := remilia.C()
+
+	// step1 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
+	// step2 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
+	// step3 := remilia.NewFinalStage(htmlParser, contentConsumer)
+
+	// scrapy := remilia.New(c, step1, step2, step3)
+	// scrapy.Process("http://localhost:8080", context.TODO())
+
+	// // TODO: only need to wait for urlGenerator
+	// // the scrapy need the new url to run the pipeline
+	// // but the data consumer and html parser should be controled by user
+	// scrapy.Wait()
+
+	rem := remilia.New()
+
+	initURL := "http://localhost:8080"
+	htmlParser := func(in *goquery.Document) error {
+		h1Text := in.Find("h1").First().Text()
+		println("h1Text: ", h1Text)
+
+		return nil
 	}
-	defer f.Close()
 
-	err = trace.Start(f)
-	if err != nil {
-		panic(err)
+	producer := rem.Just(initURL)
+	receiver := rem.Sink(htmlParser)
+
+	if err := rem.Do(producer, receiver); err != nil {
+		fmt.Println("Error: ", err)
 	}
-	defer trace.Stop()
-
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
-	urlGenerator := func(doc *goquery.Document) string {
-		return "http://localhost:8080"
-		// return ""
-	}
-
-	htmlParser := func(doc *goquery.Document) interface{} {
-		h1Text := doc.Find("h1").First().Text()
-		log.Printf("H1 Tag Content: %s\n", h1Text)
-
-		return h1Text
-	}
-
-	contentConsumer := func(data <-chan interface{}) {
-		fmt.Println("In the consumer")
-		for v := range data {
-			fmt.Println("Receive data: ", v)
-		}
-	}
-
-	c := remilia.C()
-
-	step1 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
-	step2 := remilia.NewStage(urlGenerator, htmlParser, contentConsumer)
-	step3 := remilia.NewFinalStage(htmlParser, contentConsumer)
-
-	scrapy := remilia.New(c, step1, step2, step3)
-	scrapy.Process("http://localhost:8080", context.TODO())
-
-	// TODO: only need to wait for urlGenerator
-	// the scrapy need the new url to run the pipeline
-	// but the data consumer and html parser should be controled by user
-	scrapy.Wait()
 }
