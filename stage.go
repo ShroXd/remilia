@@ -57,20 +57,23 @@ func (cs commonStage[T]) concurrency() uint {
 }
 
 type Put[T any] func(T)
-type Get[T any] func() T
+type Get[T any] func() (T, bool)
 
-// TODO: add getter for cycling pipeline
-type ProducerFn[T any] func(get Get[T], put Put[T], chew Put[T]) error
-type ProducerDef[T any] func() (*producer[T], error)
+// get - get data from upstream
+// put - put data to downstream
+// chew - put data back to upstream
+type WorkFn[T any] func(get Get[T], put Put[T], chew Put[T]) error
 
-type producer[T any] struct {
+type ProcessorDef[T any] func() (*processor[T], error)
+
+type processor[T any] struct {
 	commonStage[T]
-	fn     ProducerFn[T]
-	getter func() T
+	fn     WorkFn[T]
+	getter func() (T, bool)
 }
 
-func buildProducer[T any](fn ProducerFn[T], opts *stageOptions) *producer[T] {
-	p := &producer[T]{
+func buildProcessor[T any](fn WorkFn[T], opts *stageOptions) *processor[T] {
+	p := &processor[T]{
 		commonStage: commonStage[T]{
 			opts: opts,
 			inCh: make(chan T, opts.inputBufferSize),
@@ -78,24 +81,27 @@ func buildProducer[T any](fn ProducerFn[T], opts *stageOptions) *producer[T] {
 		fn: fn,
 	}
 
-	p.getter = func() T {
-		return <-p.inCh
+	p.getter = func() (out T, ok bool) {
+		select {
+		case out, ok = <-p.inCh:
+			return out, ok
+		}
 	}
 	return p
 }
 
-func NewProducer[T any](fn ProducerFn[T], optFns ...StageOptionFn) ProducerDef[T] {
-	return func() (*producer[T], error) {
+func NewProcessor[T any](fn WorkFn[T], optFns ...StageOptionFn) ProcessorDef[T] {
+	return func() (*processor[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
 			return nil, err
 		}
 
-		return buildProducer[T](fn, opts), nil
+		return buildProcessor[T](fn, opts), nil
 	}
 }
 
-func (p *producer[T]) execute() error {
+func (p *processor[T]) execute() error {
 	put := func(v T) {
 		p.outCh <- v
 	}
@@ -106,16 +112,16 @@ func (p *producer[T]) execute() error {
 	return p.fn(p.getter, put, chew)
 }
 
-type StageFn[T any] func(in T) (out T, err error)
-type StageDef[T any] func() (*stage[T], error)
+type FlowFn[T any] func(in T) (out T, err error)
+type FlowDef[T any] func() (*flow[T], error)
 
-type stage[T any] struct {
+type flow[T any] struct {
 	commonStage[T]
-	fn StageFn[T]
+	fn FlowFn[T]
 }
 
-func buildStage[T any](fn StageFn[T], opts *stageOptions) *stage[T] {
-	return &stage[T]{
+func buildFlow[T any](fn FlowFn[T], opts *stageOptions) *flow[T] {
+	return &flow[T]{
 		commonStage: commonStage[T]{
 			opts: opts,
 			inCh: make(chan T, opts.inputBufferSize),
@@ -124,18 +130,18 @@ func buildStage[T any](fn StageFn[T], opts *stageOptions) *stage[T] {
 	}
 }
 
-func NewStage[T any](fn StageFn[T], optFns ...StageOptionFn) StageDef[T] {
-	return func() (*stage[T], error) {
+func NewFlow[T any](fn FlowFn[T], optFns ...StageOptionFn) FlowDef[T] {
+	return func() (*flow[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
 			return nil, err
 		}
 
-		return buildStage[T](fn, opts), nil
+		return buildFlow[T](fn, opts), nil
 	}
 }
 
-func (s *stage[T]) executeOnce() (ok bool, err error) {
+func (s *flow[T]) executeOnce() (ok bool, err error) {
 	var in, out T
 	in, ok = <-s.inCh
 	if !ok {
@@ -150,7 +156,7 @@ func (s *stage[T]) executeOnce() (ok bool, err error) {
 	return ok, err
 }
 
-func (s *stage[T]) execute() error {
+func (s *flow[T]) execute() error {
 	ok, err := s.executeOnce()
 	for ok && err != nil {
 		ok, err = s.executeOnce()

@@ -119,18 +119,30 @@ func main() {
 
 	rem := remilia.New()
 
-	initURL := "http://localhost:8080"
-	htmlParser := func(in *goquery.Document) error {
-		h1Text := in.Find("h1").First().Text()
-		println("h1Text: ", h1Text)
+	initURL := "https://go.dev/doc/"
 
-		return nil
+	firstParser := func(in *goquery.Document, put remilia.Put[string]) {
+		in.Find("#developing-modules h3 a").Each(func(i int, s *goquery.Selection) {
+			href, exists := s.Attr("href")
+			if exists {
+				// fmt.Println(href)
+			}
+
+			generated := "https://go.dev" + href
+			put(generated)
+		})
+	}
+
+	secondParser := func(in *goquery.Document, put remilia.Put[string]) {
+		title := in.Find("h1").First().Text()
+		fmt.Println("Article title: ", title)
 	}
 
 	producer := rem.Just(initURL)
-	receiver := rem.Sink(htmlParser)
+	first := rem.Relay(firstParser)
+	second := rem.Relay(secondParser)
 
-	if err := rem.Do(producer, receiver); err != nil {
+	if err := rem.Do(producer, first, second); err != nil {
 		fmt.Println("Error: ", err)
 	}
 }

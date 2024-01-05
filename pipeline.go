@@ -3,11 +3,11 @@ package remilia
 import "golang.org/x/sync/errgroup"
 
 type pipeline[T any] struct {
-	producer *producer[T]
-	stages   []*stage[T]
+	producer *processor[T]
+	stages   []*processor[T]
 }
 
-func newPipeline[T any](producerDef ProducerDef[T], stageDefs ...StageDef[T]) (*pipeline[T], error) {
+func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T]) (*pipeline[T], error) {
 	p := &pipeline[T]{}
 	var err error
 
@@ -17,7 +17,7 @@ func newPipeline[T any](producerDef ProducerDef[T], stageDefs ...StageDef[T]) (*
 		return nil, err
 	}
 
-	p.stages = make([]*stage[T], len(stageDefs))
+	p.stages = make([]*processor[T], len(stageDefs))
 	for idx, stageDef := range stageDefs {
 		stage, err := stageDef()
 		if err != nil {
@@ -51,7 +51,7 @@ func (p *pipeline[T]) execute() error {
 	return eg.Wait()
 }
 
-func Execute(producerDef ProducerDef[any], stageDef ...StageDef[any]) error {
+func Execute(producerDef ProcessorDef[any], stageDef ...ProcessorDef[any]) error {
 	pipeline, err := newPipeline[any](producerDef, stageDef...)
 	if err != nil {
 		return err

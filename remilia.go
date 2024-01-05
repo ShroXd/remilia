@@ -7,17 +7,18 @@ import (
 	"github.com/google/uuid"
 )
 
-type Remilia[T any] struct {
+type Remilia struct {
 	ID   string
 	Name string
 
-	pipeline pipeline[any]
-	client   *Client
-	logger   Logger
+	pipeline   pipeline[any]
+	client     *Client
+	logger     Logger
+	urlMatcher func(s string) bool
 }
 
-func New() *Remilia[any] {
-	r := &Remilia[any]{
+func New() *Remilia {
+	r := &Remilia{
 		client: NewClient(),
 	}
 
@@ -25,7 +26,7 @@ func New() *Remilia[any] {
 	return r
 }
 
-func (r *Remilia[T]) init() {
+func (r *Remilia) init() {
 	logConfig := &LoggerConfig{
 		ID:           GetOrDefault(&r.ID, uuid.NewString()),
 		Name:         GetOrDefault(&r.Name, "defaultName"),
@@ -43,9 +44,12 @@ func (r *Remilia[T]) init() {
 		r.client = NewClient()
 	}
 	r.client.SetLogger(r.logger)
+	r.urlMatcher = URLMatcher()
 }
 
-func (r *Remilia[T]) Just(urlStr string) ProducerDef[*Request] {
+// Note: *Request is the only things we pass in the pipeline
+
+func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
 	producerFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		// TODO: we should put the response
 		req, err := NewRequest(urlStr)
@@ -56,10 +60,49 @@ func (r *Remilia[T]) Just(urlStr string) ProducerDef[*Request] {
 		return nil
 	}
 
-	return NewProducer[*Request](producerFn)
+	return NewProcessor[*Request](producerFn)
 }
 
-func (r *Remilia[T]) Sink(fn func(in *goquery.Document) error) StageDef[*Request] {
+func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) ProcessorDef[*Request] {
+	wrappedFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+		for {
+			req, ok := get()
+			if !ok {
+				break
+			}
+			resp, err := r.client.Execute(req)
+			if err != nil {
+				r.logger.Error("Failed to execute request", LogContext{
+					"err": err,
+				})
+			}
+
+			wrappedPut := func(in string) {
+				if !r.urlMatcher(in) {
+					r.logger.Error("Failed to match url", LogContext{
+						"url": in,
+					})
+				}
+
+				req, err := NewRequest(in)
+				if err != nil {
+					r.logger.Error("Failed to create request", LogContext{
+						"err": err,
+					})
+				}
+
+				put(req)
+			}
+			fn(resp.document, wrappedPut)
+		}
+
+		return nil
+	}
+
+	return NewProcessor[*Request](wrappedFn)
+}
+
+func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
 	wrappedFn := func(in *Request) (*Request, error) {
 		resp, err := r.client.Execute(in)
 		if err != nil {
@@ -69,13 +112,13 @@ func (r *Remilia[T]) Sink(fn func(in *goquery.Document) error) StageDef[*Request
 		}
 		fn(resp.document)
 
-		// TODO: temp for testing
-		return NewRequest("www.google.com")
+		return EmptyRequest(), nil
 	}
-	return NewStage[*Request](wrappedFn)
+
+	return NewFlow[*Request](wrappedFn)
 }
 
-func (r *Remilia[T]) Do(producerDef ProducerDef[*Request], stageDefs ...StageDef[*Request]) error {
+func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...ProcessorDef[*Request]) error {
 	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)
 	if err != nil {
 		return err

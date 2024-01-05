@@ -32,6 +32,11 @@ func NewRequest(urlString string) (*Request, error) {
 	}, nil
 }
 
+func EmptyRequest() *Request {
+	// TODO: re-use the existing request insteace
+	return &Request{}
+}
+
 func (req *Request) Build() *fasthttp.Request {
 	r := fasthttp.AcquireRequest()
 	for _, f := range req.options {
