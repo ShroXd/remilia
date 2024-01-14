@@ -158,7 +158,7 @@ func (s *flow[T]) executeOnce() (ok bool, err error) {
 
 func (s *flow[T]) execute() error {
 	ok, err := s.executeOnce()
-	for ok && err != nil {
+	for ok && err == nil {
 		ok, err = s.executeOnce()
 	}
 
