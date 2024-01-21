@@ -71,74 +71,122 @@ func TestCommonStage(t *testing.T) {
 	})
 }
 
-func TestProcessorExecute(t *testing.T) {
-	workFn := func(get Get[int], put Put[int], chew Put[int]) error {
-		item, ok := get()
-		if !ok {
+func TestProcessor(t *testing.T) {
+	t.Run("Successful build with valid options", func(t *testing.T) {
+		workFn := func(get Get[int], put Put[int], chew Put[int]) error {
 			return nil
 		}
-		put(item * 2)
-		return nil
-	}
 
-	processor, _ := NewProcessor[int](workFn, InputBufferSize(1))()
-	receiver := &commonStage[int]{
-		inCh: make(chan int, 1),
-	}
-	processor.outCh = receiver.inCh
+		processor, err := NewProcessor[int](workFn, Name("test"), InputBufferSize(1))()
+		assert.NoError(t, err, "NewProcessor should not return error")
+		assert.Equal(t, "test", processor.opts.name, "Name should be test")
+		assert.Equal(t, uint(1), processor.opts.inputBufferSize, "InputBufferSize should be 1")
+	})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
+	t.Run("Failed build with invalid options", func(t *testing.T) {
+		workFn := func(get Get[int], put Put[int], chew Put[int]) error {
+			return nil
+		}
 
-	go func() {
-		defer wg.Done()
-		err := processor.execute()
-		assert.NoError(t, err, "Processor should not return error")
-	}()
+		processor, err := NewProcessor[int](workFn, Name("test"), InputBufferSize(0))()
+		assert.Error(t, err, "NewProcessor should return error")
+		assert.Nil(t, processor, "Processor should be nil")
+	})
 
-	processor.inCh <- 1
-	close(processor.inCh)
+	t.Run("Successful execute", func(t *testing.T) {
+		workFn := func(get Get[int], put Put[int], chew Put[int]) error {
+			item, ok := get()
+			if !ok {
+				return nil
+			}
+			put(item * 2)
+			return nil
+		}
 
-	wg.Wait()
-	close(receiver.inCh)
+		processor, _ := NewProcessor[int](workFn, InputBufferSize(1))()
+		receiver := &commonStage[int]{
+			inCh: make(chan int, 1),
+		}
+		processor.outCh = receiver.inCh
 
-	result, ok := <-receiver.inCh
-	assert.True(t, ok, "Receiver should have received a value")
-	assert.Equal(t, 2, result, "Receiver should have received 2")
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+			err := processor.execute()
+			assert.NoError(t, err, "Processor should not return error")
+		}()
+
+		processor.inCh <- 1
+		close(processor.inCh)
+
+		wg.Wait()
+		close(receiver.inCh)
+
+		result, ok := <-receiver.inCh
+		assert.True(t, ok, "Receiver should have received a value")
+		assert.Equal(t, 2, result, "Receiver should have received 2")
+
+	})
 }
 
-func TestFlowExecute(t *testing.T) {
-	fn := func(in int) (out int, err error) {
-		return in * 2, nil
-	}
+func TestFlow(t *testing.T) {
+	t.Run("Successful build with valid options", func(t *testing.T) {
+		flowFn := func(in int) (out int, err error) {
+			return in * 2, nil
+		}
 
-	flow, _ := NewFlow[int](fn, InputBufferSize(1))()
-	receiver := &commonStage[int]{
-		inCh: make(chan int, 3),
-	}
-	flow.outCh = receiver.inCh
+		flow, err := NewFlow(flowFn, Name("test"), InputBufferSize(1))()
+		assert.NoError(t, err, "NewFlow should not return error")
+		assert.Equal(t, "test", flow.opts.name, "Name should be test")
+		assert.Equal(t, uint(1), flow.opts.inputBufferSize, "InputBufferSize should be 1")
+	})
 
-	var wg sync.WaitGroup
+	t.Run("Failed build with invalid options", func(t *testing.T) {
+		flowFn := func(in int) (out int, err error) {
+			return in * 2, nil
+		}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(receiver.inCh)
-		err := flow.execute()
-		assert.NoError(t, err, "Flow should not return error")
-	}()
+		flow, err := NewFlow(flowFn, Name("test"), InputBufferSize(0))()
+		assert.Error(t, err, "NewFlow should return error")
+		assert.Nil(t, flow, "Flow should be nil")
+	})
 
-	flow.inCh <- 1
-	flow.inCh <- 2
-	flow.inCh <- 3
-	close(flow.inCh)
+	t.Run("Successful execute", func(t *testing.T) {
+		fn := func(in int) (out int, err error) {
+			return in * 2, nil
+		}
 
-	wg.Wait()
+		flow, _ := NewFlow[int](fn, InputBufferSize(1))()
+		receiver := &commonStage[int]{
+			inCh: make(chan int, 3),
+		}
+		flow.outCh = receiver.inCh
 
-	results := make([]int, 0, 3)
-	for out := range receiver.inCh {
-		results = append(results, out)
-	}
+		var wg sync.WaitGroup
 
-	assert.Equal(t, []int{2, 4, 6}, results, "Receiver should have received 2, 4, 6")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer close(receiver.inCh)
+			err := flow.execute()
+			assert.NoError(t, err, "Flow should not return error")
+		}()
+
+		flow.inCh <- 1
+		flow.inCh <- 2
+		flow.inCh <- 3
+		close(flow.inCh)
+
+		wg.Wait()
+
+		results := make([]int, 0, 3)
+		for out := range receiver.inCh {
+			results = append(results, out)
+		}
+
+		assert.Equal(t, []int{2, 4, 6}, results, "Receiver should have received 2, 4, 6")
+
+	})
 }
