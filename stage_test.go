@@ -30,6 +30,47 @@ func TestStageOptions(t *testing.T) {
 	})
 }
 
+func TestCommonStage(t *testing.T) {
+	t.Run("outputChannelCloser should close output channel", func(t *testing.T) {
+		// the output channel of current stage is the input channel of next stage
+		inCh := make(chan int)
+		stage := &commonStage[int]{
+			outCh: inCh,
+		}
+		closer := stage.outputChannelCloser()
+		closer()
+
+		_, ok := <-inCh
+		assert.False(t, ok, "Output channel should be closed")
+	})
+
+	t.Run("exhaustInputChannel should exhaust input channel", func(t *testing.T) {
+		inCh := make(chan int)
+		stage := &commonStage[int]{
+			inCh: inCh,
+		}
+
+		go func() {
+			inCh <- 1
+			inCh <- 2
+			close(inCh)
+		}()
+		stage.exhaustInputChannel()
+
+		_, ok := <-inCh
+		assert.False(t, ok, "Input channel should be exhausted")
+	})
+
+	t.Run("concurrency should return concurrency", func(t *testing.T) {
+		stage := &commonStage[int]{
+			opts: &stageOptions{
+				concurrency: 2,
+			},
+		}
+		assert.Equal(t, uint(2), stage.concurrency(), "Concurrency should be 2")
+	})
+}
+
 func TestProcessorExecute(t *testing.T) {
 	workFn := func(get Get[int], put Put[int], chew Put[int]) error {
 		item, ok := get()

@@ -30,7 +30,7 @@ func Name(name string) StageOptionFn {
 
 func InputBufferSize(size uint) StageOptionFn {
 	return func(so *stageOptions) error {
-		if size < 1 {
+		if size == 0 {
 			return ErrInvalidInputBufferSize
 		}
 		so.inputBufferSize = size
