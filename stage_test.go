@@ -7,6 +7,29 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestStageOptions(t *testing.T) {
+	t.Run("Successful build with valid options", func(t *testing.T) {
+		so, err := buildStageOptions([]StageOptionFn{
+			Name("test"),
+			InputBufferSize(1),
+		})
+
+		assert.NoError(t, err, "buildStageOptions should not return error")
+		assert.Equal(t, "test", so.name, "Name should be test")
+		assert.Equal(t, uint(1), so.inputBufferSize, "InputBufferSize should be 1")
+	})
+
+	t.Run("Failed build with invalid options", func(t *testing.T) {
+		so, err := buildStageOptions([]StageOptionFn{
+			Name("test"),
+			InputBufferSize(0),
+		})
+
+		assert.Error(t, err, "buildStageOptions should return error")
+		assert.Nil(t, so, "stageOptions should be nil")
+	})
+}
+
 func TestProcessorExecute(t *testing.T) {
 	workFn := func(get Get[int], put Put[int], chew Put[int]) error {
 		item, ok := get()
