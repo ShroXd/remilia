@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/PuerkitoBio/goquery v1.8.1
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.6.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/net v0.17.0
 )
@@ -16,9 +16,9 @@ require (
 	github.com/klauspost/compress v1.17.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
+	github.com/stretchr/testify v1.8.4
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.51.0 // indirect
+	github.com/valyala/fasthttp v1.51.0
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/sync v0.5.0
 	golang.org/x/text v0.13.0 // indirect
