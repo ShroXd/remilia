@@ -117,7 +117,7 @@ func main() {
 	// // but the data consumer and html parser should be controled by user
 	// scrapy.Wait()
 
-	rem := remilia.New()
+	rem, _ := remilia.New()
 
 	initURL := "https://go.dev/doc/"
 

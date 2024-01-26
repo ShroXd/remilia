@@ -9,7 +9,7 @@ type stageOptions struct {
 	inputBufferSize uint
 }
 
-type StageOptionFn func(so *stageOptions) error
+type StageOptionFn OptionFn[*stageOptions]
 
 func buildStageOptions(optFns []StageOptionFn) (*stageOptions, error) {
 	so := &stageOptions{}

@@ -2,9 +2,12 @@ package remilia
 
 import (
 	"log"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
 type Remilia struct {
@@ -17,16 +20,35 @@ type Remilia struct {
 	urlMatcher func(s string) bool
 }
 
-func New() *Remilia {
-	r := &Remilia{
-		client: NewClient(),
+func New() (*Remilia, error) {
+	internalClient := newFastHTTPClient()
+
+	client, err := NewClient(internalClient)
+	if err != nil {
+		return nil, err
 	}
 
-	r.init()
-	return r
+	r := &Remilia{
+		client: client,
+	}
+
+	if err := r.init(); err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
-func (r *Remilia) init() {
+func newFastHTTPClient() *fasthttp.Client {
+	return &fasthttp.Client{
+		ReadTimeout:              10 * time.Second,
+		WriteTimeout:             10 * time.Second,
+		NoDefaultUserAgentHeader: true,
+		// TODO: figure out how to set timeout for TCP connection
+		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+	}
+}
+
+func (r *Remilia) init() error {
 	logConfig := &LoggerConfig{
 		ID:           GetOrDefault(&r.ID, uuid.NewString()),
 		Name:         GetOrDefault(&r.Name, "defaultName"),
@@ -41,10 +63,19 @@ func (r *Remilia) init() {
 	}
 
 	if r.client == nil {
-		r.client = NewClient()
+		internalClient := newFastHTTPClient()
+		client, err := NewClient(
+			internalClient,
+			ClientLogger(r.logger),
+		)
+		if err != nil {
+			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+		}
+		r.client = client
 	}
-	r.client.SetLogger(r.logger)
 	r.urlMatcher = URLMatcher()
+
+	return nil
 }
 
 // Note: *Request is the only things we pass in the pipeline
