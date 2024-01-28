@@ -3,7 +3,7 @@ package remilia
 import "regexp"
 
 func GetOrDefault(s *string, def string) string {
-	if *s == "" {
+	if s == nil || *s == "" {
 		return def
 	}
 

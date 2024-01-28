@@ -12,8 +12,6 @@ type Request struct {
 	Headers     map[string]string
 	Body        []byte
 	QueryParams map[string]string
-
-	logger Logger
 }
 
 type RequestOption func(*Request) error
@@ -88,7 +86,12 @@ func (req *Request) Build() *fasthttp.Request {
 		fasthttpReq.Header.Set(k, v)
 	}
 
-	// TODO: set up all the fields
+	fasthttpReq.BodyWriter().Write(req.Body)
+
+	args := fasthttpReq.URI().QueryArgs()
+	for k, v := range req.QueryParams {
+		args.Add(k, v)
+	}
 
 	return fasthttpReq
 }
