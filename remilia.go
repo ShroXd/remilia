@@ -83,7 +83,7 @@ func (r *Remilia) init() error {
 func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
 	producerFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		// TODO: we should put the response
-		req, err := NewRequest(urlStr)
+		req, err := NewRequest(WithURL(urlStr))
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) Processo
 					})
 				}
 
-				req, err := NewRequest(in)
+				req, err := NewRequest(WithURL(in))
 				if err != nil {
 					r.logger.Error("Failed to create request", LogContext{
 						"err": err,

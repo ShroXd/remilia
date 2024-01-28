@@ -5,15 +5,17 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/valyala/fasthttp"
 )
 
-type MockFasthttpClient struct {
-	DoFunc func(req *fasthttp.Request, resp *fasthttp.Response) error
+type MockHttpClient struct {
+	mock.Mock
 }
 
-func (m *MockFasthttpClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
-	return m.DoFunc(req, resp)
+func (m *MockHttpClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
+	args := m.Called(req, resp)
+	return args.Error(0)
 }
 
 func TestClientOptions(t *testing.T) {
@@ -54,21 +56,44 @@ func TestClientOptions(t *testing.T) {
 	})
 
 	t.Run("Successful execute", func(t *testing.T) {
-		mockClient := &MockFasthttpClient{
-			DoFunc: func(req *fasthttp.Request, resp *fasthttp.Response) error {
-				return nil
-			},
-		}
-
-		request, err := NewRequest("http://example.com")
-		assert.NoError(t, err, "NewRequest should not return error")
-
-		client, err := NewClient(mockClient)
+		httpClient := new(MockHttpClient)
+		client, err := NewClient(httpClient)
 		assert.NoError(t, err, "NewClient should not return error")
 
-		resp, err := client.Execute(request)
+		httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+			resp := args.Get(1).(*fasthttp.Response)
+			resp.SetBody([]byte("mock response"))
+		}).Return(nil)
+
+		request := &Request{}
+		response, err := client.Execute(request)
+
 		assert.NoError(t, err, "Execute should not return error")
-		assert.NotNil(t, resp, "Response should not be nil")
+		assert.NotNil(t, response, "Response should not be nil")
+
+		httpClient.AssertExpectations(t)
+	})
+
+	t.Run("Successful execute with pre-request hooks", func(t *testing.T) {
+		httpClient := new(MockHttpClient)
+		client, err := NewClient(httpClient, PreRequestHooks(func(client *Client, req *Request) error {
+			req.Method = "GET"
+			return nil
+		}))
+		assert.NoError(t, err, "NewClient should not return error")
+
+		httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+			req := args.Get(0).(*fasthttp.Request)
+			assert.Equal(t, "GET", string(req.Header.Method()), "Method should be GET")
+		}).Return(nil)
+
+		request := &Request{}
+		response, err := client.Execute(request)
+
+		assert.NoError(t, err, "Execute should not return error")
+		assert.NotNil(t, response, "Response should not be nil")
+
+		httpClient.AssertExpectations(t)
 	})
 }
 

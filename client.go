@@ -134,7 +134,6 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 	}
 
 	req := request.Build()
-	req.SetRequestURI(request.URL)
 
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
