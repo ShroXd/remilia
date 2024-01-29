@@ -28,6 +28,16 @@ func Name(name string) StageOptionFn {
 	}
 }
 
+func Concurrency(concurrency uint) StageOptionFn {
+	return func(so *stageOptions) error {
+		if concurrency == 0 {
+			return ErrInvalidConcurrency
+		}
+		so.concurrency = concurrency
+		return nil
+	}
+}
+
 func InputBufferSize(size uint) StageOptionFn {
 	return func(so *stageOptions) error {
 		if size == 0 {

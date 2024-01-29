@@ -1,0 +1,17 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/ShroXd/remilia
+BenchmarkFanIn/Small_Data-12         	  646818	      1779 ns/op
+BenchmarkFanIn/Medium_Data-12        	  610748	      1807 ns/op
+BenchmarkFanIn/Large_Data-12         	  652249	      1760 ns/op
+BenchmarkFanIn/Huge_Data-12          	  646962	      1779 ns/op
+BenchmarkProcessor/Concurrency=10,_BufferSize=100,_DataSize=1000-12         	  131544	      9718 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=100,_DataSize=1000-12        	  159184	      7441 ns/op
+BenchmarkProcessor/Concurrency=1000,_BufferSize=100,_DataSize=1000-12       	  253707	     10130 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=10,_DataSize=1000-12         	  151924	      8817 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=100,_DataSize=1000#01-12     	  186608	      8419 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=1000,_DataSize=1000-12       	  154264	      8228 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=100,_DataSize=100-12         	  139614	      8045 ns/op
+BenchmarkProcessor/Concurrency=100,_BufferSize=100,_DataSize=1000#02-12     	  148366	      8359 ns/op
+PASS
+ok  	github.com/ShroXd/remilia	629.656s
