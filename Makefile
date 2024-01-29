@@ -1,18 +1,49 @@
-.PHONY: start test benchmark
+BINARY_NAME=lib
+OUTPUT_DIR=out
+COVER_PROFILE=$(OUTPUT_DIR)/coverage.out
+CPU_PROFILE=$(OUTPUT_DIR)/cpu.pprof
+MEM_PROFILE=$(OUTPUT_DIR)/mem.pprof
 
-start:
-	#rm $(PWD)/examples/logs/logfile.log
-	cd examples && go run dev.go
+$(OUTPUT_DIR):
+	@echo "📂 Creating output directory..."
+	@mkdir -p $(OUTPUT_DIR)
 
-test:
-	@go test -coverprofile=./out/coverage.out -coverpkg=`go list ./... | grep -v "/mock\|/examples"` .
+build: $(OUTPUT_DIR)
+	@echo "🚀 Building the project..."
+	@go build -o $(OUTPUT_DIR)/$(BINARY_NAME) ./examples/dev.go
+
+run: build
+	@echo "🏃‍♀️ Running the binary..."
+	@$(OUTPUT_DIR)/$(BINARY_NAME)
+
+test: $(OUTPUT_DIR)
+	@echo "🧪 Running tests..."
+	@go test -coverprofile=$(COVER_PROFILE) -coverpkg=`go list ./... | grep -v "/mock\|/examples"` .
 
 cover:
-	@go tool cover -html=./out/coverage.out
+	@echo "📊 Generating coverage report..."
+	@go tool cover -html=$(COVER_PROFILE)
 
 benchmark:
-	@go test ./... -bench . 
+	@echo "⚖️ Running benchmarks..."
+	@go test ./... -bench .
 
-run-mock-server:
-	@echo "Starting mock server..."
-	@go run ./mock/server.go
+profile: build
+	@echo "📈 Running the program and collecting performance data..."
+	@./$(OUTPUT_DIR)/$(BINARY_NAME) 2> /dev/null
+	@echo "📊 CPU and memory profile files generated in $(OUTPUT_DIR)/"
+
+view-cpu: profile 
+	@echo "👁️‍🗨️ Viewing CPU profile file..."
+	@go tool pprof -http=:8080 $(CPU_PROFILE)
+
+view-mem: profile 
+	@echo "👁️‍🗨️ Viewing memory profile file..."
+	@go tool pprof -http=:8080 $(MEM_PROFILE)
+
+clean:
+	@echo "🧹 Cleaning up..."
+	@rm -rf $(OUTPUT_DIR)
+	@echo "✅ Cleaned up"
+
+.PHONY: build run test cover benchmark profile view-cpu view-mem clean
