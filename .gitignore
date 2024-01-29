@@ -23,5 +23,8 @@ go.work
 # Log
 logs/
 
+# Out
+out/
+
 .vscode/
 .idea/
