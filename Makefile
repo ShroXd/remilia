@@ -5,7 +5,10 @@ start:
 	cd examples && go run dev.go
 
 test:
-	@go test -cover ./...
+	@go test -coverprofile=coverage.out -coverpkg=`go list ./... | grep -v "/mock\|/examples"` .
+
+cover:
+	@go tool cover -html=coverage.out
 
 benchmark:
 	@go test ./... -bench . 
