@@ -236,20 +236,20 @@ func TestConvertToZapFields(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
-		expected []zap.Field
+		expected map[string]zap.Field
 	}{
 		{
 			name:     "Empty Map",
 			input:    map[string]interface{}{},
-			expected: []zap.Field{},
+			expected: map[string]zap.Field{},
 		},
 		{
 			name: "Single Field",
 			input: map[string]interface{}{
 				"key1": "value1",
 			},
-			expected: []zap.Field{
-				zap.Any("key1", "value1"),
+			expected: map[string]zap.Field{
+				"key1": zap.Any("key1", "value1"),
 			},
 		},
 		{
@@ -259,10 +259,10 @@ func TestConvertToZapFields(t *testing.T) {
 				"key2": 123,
 				"key3": true,
 			},
-			expected: []zap.Field{
-				zap.Any("key1", "value1"),
-				zap.Any("key2", 123),
-				zap.Any("key3", true),
+			expected: map[string]zap.Field{
+				"key1": zap.Any("key1", "value1"),
+				"key2": zap.Any("key2", 123),
+				"key3": zap.Any("key3", true),
 			},
 		},
 	}
@@ -273,8 +273,8 @@ func TestConvertToZapFields(t *testing.T) {
 
 			assert.Len(t, result, len(tt.expected), "Incorrect number of fields")
 
-			for i, field := range result {
-				assert.Equal(t, tt.expected[i].Key, field.Key, "Incorrect field key")
+			for _, field := range result {
+				assert.Equal(t, tt.expected[field.Key], field, "Incorrect field")
 			}
 		})
 	}
