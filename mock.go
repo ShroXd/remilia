@@ -31,10 +31,6 @@ func (m *MockLogger) Panic(msg string, context ...LogContext) {
 	m.Called(msg, context)
 }
 
-func (m *MockLogger) Fatal(msg string, context ...LogContext) {
-	m.Called(msg, context)
-}
-
 func newMockLogger(t *testing.T) *MockLogger {
 	mockLogger := new(MockLogger)
 
@@ -43,7 +39,6 @@ func newMockLogger(t *testing.T) *MockLogger {
 	mockLogger.On("Warn", mock.Anything, mock.Anything).Return(nil)
 	mockLogger.On("Error", mock.Anything, mock.Anything).Return(nil)
 	mockLogger.On("Panic", mock.Anything, mock.Anything).Return(nil)
-	mockLogger.On("Fatal", mock.Anything, mock.Anything).Return(nil)
 
 	return mockLogger
 }

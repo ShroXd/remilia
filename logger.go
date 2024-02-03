@@ -17,7 +17,6 @@ type Logger interface {
 	Warn(msg string, context ...LogContext)
 	Error(msg string, context ...LogContext)
 	Panic(msg string, context ...LogContext)
-	Fatal(msg string, context ...LogContext)
 }
 
 type DefaultLogger struct {
@@ -49,11 +48,6 @@ func (l *DefaultLogger) Panic(msg string, context ...LogContext) {
 	l.internal.Panic(msg, fields...)
 }
 
-func (l *DefaultLogger) Fatal(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext(context))
-	l.internal.Fatal(msg, fields...)
-}
-
 func getContext(context []LogContext) LogContext {
 	if len(context) > 0 {
 		return context[0]
@@ -69,7 +63,6 @@ const (
 	InfoLevel
 	WarnLevel
 	ErrorLevel
-	FatalLevel
 )
 
 func (level LogLevel) toZapLevel() zapcore.Level {
@@ -82,8 +75,6 @@ func (level LogLevel) toZapLevel() zapcore.Level {
 		return zap.WarnLevel
 	case ErrorLevel:
 		return zap.ErrorLevel
-	case FatalLevel:
-		return zap.FatalLevel
 	default:
 		return zap.InfoLevel
 	}
@@ -104,14 +95,14 @@ func newConsoleCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) za
 	)
 }
 
-func newFileCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
+func newFileCore(fs FileSystemOperations, encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
 	logDir := "logs" // Assuming logs directory is at the same level as the executable
-	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+	if err := fs.MkdirAll(logDir, os.ModePerm); err != nil {
 		return nil, err
 	}
 
 	logFilePath := filepath.Join(logDir, fileName)
-	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := fs.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -128,12 +119,12 @@ func getLogFileName(c *LoggerConfig) string {
 	return fmt.Sprintf("%s_%s_%s.log", c.ID, c.Name, time.Now().Format(timeFormat))
 }
 
-func createLogger(c *LoggerConfig) (*DefaultLogger, error) {
+func createLogger(c *LoggerConfig, fs FileSystemOperations) (*DefaultLogger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	consoleCore := newConsoleCore(encoderConfig, c.ConsoleLevel.toZapLevel())
-	fileCore, err := newFileCore(encoderConfig, c.FileLevel.toZapLevel(), getLogFileName(c))
+	fileCore, err := newFileCore(fs, encoderConfig, c.FileLevel.toZapLevel(), getLogFileName(c))
 	if err != nil {
 		return nil, err
 	}

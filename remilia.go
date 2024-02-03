@@ -56,7 +56,7 @@ func (r *Remilia) init() error {
 	}
 
 	var err error
-	r.logger, err = createLogger(logConfig)
+	r.logger, err = createLogger(logConfig, &FileSystem{})
 	if err != nil {
 		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 	}

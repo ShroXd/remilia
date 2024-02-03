@@ -1,6 +1,7 @@
 package remilia
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,6 +46,20 @@ func TestLoggerLevels(t *testing.T) {
 			assert.Equal(t, "value", entry.ContextMap()["key"], "Incorrect context logged")
 		})
 	}
+
+	t.Run("no context", func(t *testing.T) {
+		recorded.TakeAll()
+
+		logger.Info("test message")
+
+		entries := recorded.All()
+		assert.Equal(t, 1, len(entries), "Expected one log entry to be recorded")
+		entry := entries[0]
+
+		assert.Equal(t, zap.InfoLevel, entry.Level, "Incorrect log level")
+		assert.Equal(t, "test message", entry.Message, "Incorrect message")
+		assert.Empty(t, entry.ContextMap(), "Expected no context to be logged")
+	})
 }
 
 func TestPanicLog(t *testing.T) {
@@ -78,7 +93,7 @@ func TestToZapLevel(t *testing.T) {
 		{"InfoLevel", InfoLevel, zapcore.InfoLevel},
 		{"WarnLevel", WarnLevel, zapcore.WarnLevel},
 		{"ErrorLevel", ErrorLevel, zapcore.ErrorLevel},
-		{"FatalLevel", FatalLevel, zapcore.FatalLevel},
+		{"Default", 127, zapcore.InfoLevel},
 	}
 
 	for _, tt := range tests {
@@ -158,13 +173,15 @@ func TestNewFileCore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// TODO: consider if it's necessary to use MockFileSystem
+			fs := &FileSystem{}
 			encoderConfig := zap.NewProductionEncoderConfig()
 			logFileName := getLogFileName(&LoggerConfig{
 				ID:   "test",
 				Name: "unit",
 			})
 
-			core, err := newFileCore(encoderConfig, tt.level, logFileName)
+			core, err := newFileCore(fs, encoderConfig, tt.level, logFileName)
 			defer os.Remove(filepath.Join("logs", logFileName))
 
 			assert.NotNil(t, core, "Expected core to be created")
@@ -174,6 +191,44 @@ func TestNewFileCore(t *testing.T) {
 			assert.Equal(t, tt.expectExists, !os.IsNotExist(err), "Expected log file to exist")
 		})
 	}
+
+	t.Run("Error on creating log file", func(t *testing.T) {
+		mockFS := MockFileSystem{
+			MkdirAllErr: errors.New("mkdir error"),
+		}
+
+		encoderConfig := zap.NewProductionEncoderConfig()
+		logFileName := getLogFileName(&LoggerConfig{
+			ID:   "test",
+			Name: "unit",
+		})
+
+		core, err := newFileCore(mockFS, encoderConfig, zapcore.DebugLevel, logFileName)
+		defer os.Remove(filepath.Join("logs", logFileName))
+
+		assert.Nil(t, core, "Expected core to be nil")
+		assert.Error(t, err, "Expected error")
+		assert.Equal(t, "mkdir error", err.Error(), "Incorrect error message")
+	})
+
+	t.Run("Error on open file", func(t *testing.T) {
+		mockFS := MockFileSystem{
+			OpenFileErr: errors.New("test open file error"),
+		}
+
+		encoderConfig := zap.NewProductionEncoderConfig()
+		logFileName := getLogFileName(&LoggerConfig{
+			ID:   "test",
+			Name: "unit",
+		})
+
+		core, err := newFileCore(mockFS, encoderConfig, zapcore.DebugLevel, logFileName)
+		defer os.Remove(filepath.Join("logs", logFileName))
+
+		assert.Nil(t, core, "Expected core to be nil")
+		assert.Error(t, err, "Expected error")
+		assert.Equal(t, "test open file error", err.Error(), "Incorrect error message")
+	})
 }
 
 func TestGetLogFileName(t *testing.T) {
@@ -207,19 +262,13 @@ func TestCreateLogger(t *testing.T) {
 			},
 			expectErr: false,
 		},
-		// TODO: trigger a error when create logger
-		// {
-		// 	name:   "Invalid Config",
-		// 	config: LoggerConfig{
-		// 		// Intentionally missing or incorrect configuration
-		// 	},
-		// 	expectErr: true,
-		// },
 	}
+
+	fs := &FileSystem{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger, err := createLogger(&tt.config)
+			logger, err := createLogger(&tt.config, fs)
 
 			if tt.expectErr {
 				assert.Error(t, err, "Expected error")
@@ -230,6 +279,25 @@ func TestCreateLogger(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Error on creating log file", func(t *testing.T) {
+		mockFS := MockFileSystem{
+			MkdirAllErr: errors.New("test mkdir error"),
+		}
+
+		config := LoggerConfig{
+			ID:           "testID",
+			Name:         "testLogger",
+			ConsoleLevel: InfoLevel,
+			FileLevel:    DebugLevel,
+		}
+
+		logger, err := createLogger(&config, mockFS)
+
+		assert.Nil(t, logger, "Expected logger to be nil")
+		assert.Error(t, err, "Expected error")
+		assert.Equal(t, "test mkdir error", err.Error(), "Incorrect error message")
+	})
 }
 
 func TestConvertToZapFields(t *testing.T) {
