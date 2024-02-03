@@ -93,16 +93,20 @@ func PostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
 	}
 }
 
-type HttpClient interface {
+type InternalClient interface {
 	Do(req *fasthttp.Request, resp *fasthttp.Response) error
+}
+
+type HTTPClient interface {
+	Execute(request *Request) (*Response, error)
 }
 
 type Client struct {
 	opts     *clientOptions
-	internal HttpClient
+	internal InternalClient
 }
 
-func NewClient(client HttpClient, optFns ...ClientOptionFn) (*Client, error) {
+func NewClient(client InternalClient, optFns ...ClientOptionFn) (*Client, error) {
 	opts, err := buildClientOptions(optFns)
 	if err != nil {
 		return nil, err

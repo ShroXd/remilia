@@ -9,15 +9,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type MockHttpClient struct {
-	mock.Mock
-}
-
-func (m *MockHttpClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
-	args := m.Called(req, resp)
-	return args.Error(0)
-}
-
 func TestClientOptions(t *testing.T) {
 	t.Run("Successful build with valid options", func(t *testing.T) {
 		opts, err := buildClientOptions([]ClientOptionFn{
@@ -56,7 +47,7 @@ func TestClientOptions(t *testing.T) {
 	})
 
 	t.Run("Successful execute", func(t *testing.T) {
-		httpClient := new(MockHttpClient)
+		httpClient := new(MockInternalClient)
 		client, err := NewClient(httpClient)
 		assert.NoError(t, err, "NewClient should not return error")
 
@@ -75,7 +66,7 @@ func TestClientOptions(t *testing.T) {
 	})
 
 	t.Run("Successful execute with pre-request hooks", func(t *testing.T) {
-		httpClient := new(MockHttpClient)
+		httpClient := new(MockInternalClient)
 		client, err := NewClient(httpClient, PreRequestHooks(func(client *Client, req *Request) error {
 			req.Method = "GET"
 			return nil

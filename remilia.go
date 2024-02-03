@@ -14,8 +14,7 @@ type Remilia struct {
 	ID   string
 	Name string
 
-	pipeline   pipeline[any]
-	client     *Client
+	client     HTTPClient
 	logger     Logger
 	urlMatcher func(s string) bool
 }
@@ -80,8 +79,8 @@ func (r *Remilia) init() error {
 
 // Note: *Request is the only things we pass in the pipeline
 
-func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
-	producerFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		// TODO: we should put the response
 		req, err := NewRequest(WithURL(urlStr))
 		if err != nil {
@@ -90,12 +89,10 @@ func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
 		put(req)
 		return nil
 	}
-
-	return NewProcessor[*Request](producerFn)
 }
 
-func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) ProcessorDef[*Request] {
-	wrappedFn := func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+func (r *Remilia) relayWrappedFunc(fn func(in *goquery.Document, put Put[string])) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		for {
 			req, ok := get()
 			if !ok {
@@ -113,6 +110,7 @@ func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) Processo
 					r.logger.Error("Failed to match url", LogContext{
 						"url": in,
 					})
+					return
 				}
 
 				req, err := NewRequest(WithURL(in))
@@ -120,6 +118,7 @@ func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) Processo
 					r.logger.Error("Failed to create request", LogContext{
 						"err": err,
 					})
+					return
 				}
 
 				put(req)
@@ -129,12 +128,10 @@ func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) Processo
 
 		return nil
 	}
-
-	return NewProcessor[*Request](wrappedFn)
 }
 
-func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
-	wrappedFn := func(in *Request) (*Request, error) {
+func (r *Remilia) sinkWrappedFunc(fn func(in *goquery.Document) error) func(in *Request) (*Request, error) {
+	return func(in *Request) (*Request, error) {
 		resp, err := r.client.Execute(in)
 		if err != nil {
 			r.logger.Error("Failed to execute request", LogContext{
@@ -145,8 +142,18 @@ func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
 
 		return EmptyRequest(), nil
 	}
+}
 
-	return NewFlow[*Request](wrappedFn)
+func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
+	return NewProcessor[*Request](r.justWrappedFunc(urlStr))
+}
+
+func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) ProcessorDef[*Request] {
+	return NewProcessor[*Request](r.relayWrappedFunc(fn))
+}
+
+func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
+	return NewFlow[*Request](r.sinkWrappedFunc(fn))
 }
 
 func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...ProcessorDef[*Request]) error {
