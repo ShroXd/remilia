@@ -52,13 +52,13 @@ type LoggerConfig struct {
 func newConsoleCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) zapcore.Core {
 	return zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
-		zapcore.Lock(os.Stdout), // using Lock for concurrent safety
+		zapcore.Lock(os.Stdout),
 		level,
 	)
 }
 
 func newFileCore(fs FileSystemOperations, encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
-	logDir := "logs" // Assuming logs directory is at the same level as the executable
+	logDir := "logs"
 	if err := fs.MkdirAll(logDir, os.ModePerm); err != nil {
 		return nil, err
 	}

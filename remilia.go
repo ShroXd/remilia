@@ -77,8 +77,6 @@ func (r *Remilia) init() error {
 	return nil
 }
 
-// Note: *Request is the only things we pass in the pipeline
-
 func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		// TODO: we should put the response
