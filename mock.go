@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/valyala/fasthttp"
 )
 
 type MockLogger struct {
@@ -34,13 +35,9 @@ func (m *MockLogger) Fatal(msg string, context ...LogContext) {
 	m.Called(msg, context)
 }
 
-// newMockLogger sets up and returns a new MockLogger with pre-defined expectations for each log level.
 func newMockLogger(t *testing.T) *MockLogger {
 	mockLogger := new(MockLogger)
 
-	// Set up expectations for the methods that will be called.
-	// The mock.Anything argument is used here to indicate that any argument is acceptable.
-	// If you need to set specific arguments, replace mock.Anything with the actual argument value.
 	mockLogger.On("Debug", mock.Anything, mock.Anything).Return(nil)
 	mockLogger.On("Info", mock.Anything, mock.Anything).Return(nil)
 	mockLogger.On("Warn", mock.Anything, mock.Anything).Return(nil)
@@ -49,4 +46,22 @@ func newMockLogger(t *testing.T) *MockLogger {
 	mockLogger.On("Fatal", mock.Anything, mock.Anything).Return(nil)
 
 	return mockLogger
+}
+
+type MockInternalClient struct {
+	mock.Mock
+}
+
+func (m *MockInternalClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
+	args := m.Called(req, resp)
+	return args.Error(0)
+}
+
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Execute(request *Request) (*Response, error) {
+	args := m.Called(request)
+	return args.Get(0).(*Response), args.Error(1)
 }
