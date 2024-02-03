@@ -1,6 +1,13 @@
 package remilia
 
-import "os"
+import (
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/mock"
+	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
+)
 
 type FileSystemOperations interface {
 	MkdirAll(path string, perm os.FileMode) error
@@ -29,4 +36,104 @@ func (mfs MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
 
 func (mfs MockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return mfs.OpenFileMock, mfs.OpenFileErr
+}
+
+type LogContext map[string]interface{}
+type Logger interface {
+	Debug(msg string, context ...LogContext)
+	Info(msg string, context ...LogContext)
+	Warn(msg string, context ...LogContext)
+	Error(msg string, context ...LogContext)
+	Panic(msg string, context ...LogContext)
+}
+
+type DefaultLogger struct {
+	internal *zap.Logger
+}
+
+func (l *DefaultLogger) Debug(msg string, context ...LogContext) {
+	fields := convertToZapFields(getContext(context))
+	l.internal.Debug(msg, fields...)
+}
+
+func (l *DefaultLogger) Info(msg string, context ...LogContext) {
+	fields := convertToZapFields(getContext((context)))
+	l.internal.Info(msg, fields...)
+}
+
+func (l *DefaultLogger) Warn(msg string, context ...LogContext) {
+	fields := convertToZapFields(getContext(context))
+	l.internal.Warn(msg, fields...)
+}
+
+func (l *DefaultLogger) Error(msg string, context ...LogContext) {
+	fields := convertToZapFields(getContext(context))
+	l.internal.Error(msg, fields...)
+}
+
+func (l *DefaultLogger) Panic(msg string, context ...LogContext) {
+	fields := convertToZapFields(getContext(context))
+	l.internal.Panic(msg, fields...)
+}
+
+type MockLogger struct {
+	mock.Mock
+}
+
+func (m *MockLogger) Debug(msg string, context ...LogContext) {
+	m.Called(msg, context)
+}
+
+func (m *MockLogger) Info(msg string, context ...LogContext) {
+	m.Called(msg, context)
+}
+
+func (m *MockLogger) Warn(msg string, context ...LogContext) {
+	m.Called(msg, context)
+}
+
+func (m *MockLogger) Error(msg string, context ...LogContext) {
+	m.Called(msg, context)
+}
+
+func (m *MockLogger) Panic(msg string, context ...LogContext) {
+	m.Called(msg, context)
+}
+
+func newMockLogger(t *testing.T) *MockLogger {
+	mockLogger := new(MockLogger)
+
+	mockLogger.On("Debug", mock.Anything, mock.Anything).Return(nil)
+	mockLogger.On("Info", mock.Anything, mock.Anything).Return(nil)
+	mockLogger.On("Warn", mock.Anything, mock.Anything).Return(nil)
+	mockLogger.On("Error", mock.Anything, mock.Anything).Return(nil)
+	mockLogger.On("Panic", mock.Anything, mock.Anything).Return(nil)
+
+	return mockLogger
+}
+
+type InternalClient interface {
+	Do(req *fasthttp.Request, resp *fasthttp.Response) error
+}
+
+type MockInternalClient struct {
+	mock.Mock
+}
+
+func (m *MockInternalClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
+	args := m.Called(req, resp)
+	return args.Error(0)
+}
+
+type HTTPClient interface {
+	Execute(request *Request) (*Response, error)
+}
+
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Execute(request *Request) (*Response, error) {
+	args := m.Called(request)
+	return args.Get(0).(*Response), args.Error(1)
 }

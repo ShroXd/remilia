@@ -10,44 +10,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type LogContext map[string]interface{}
-type Logger interface {
-	Debug(msg string, context ...LogContext)
-	Info(msg string, context ...LogContext)
-	Warn(msg string, context ...LogContext)
-	Error(msg string, context ...LogContext)
-	Panic(msg string, context ...LogContext)
-}
-
-type DefaultLogger struct {
-	internal *zap.Logger
-}
-
-func (l *DefaultLogger) Debug(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext(context))
-	l.internal.Debug(msg, fields...)
-}
-
-func (l *DefaultLogger) Info(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext((context)))
-	l.internal.Info(msg, fields...)
-}
-
-func (l *DefaultLogger) Warn(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext(context))
-	l.internal.Warn(msg, fields...)
-}
-
-func (l *DefaultLogger) Error(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext(context))
-	l.internal.Error(msg, fields...)
-}
-
-func (l *DefaultLogger) Panic(msg string, context ...LogContext) {
-	fields := convertToZapFields(getContext(context))
-	l.internal.Panic(msg, fields...)
-}
-
 func getContext(context []LogContext) LogContext {
 	if len(context) > 0 {
 		return context[0]

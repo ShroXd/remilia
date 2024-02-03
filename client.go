@@ -93,14 +93,6 @@ func PostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
 	}
 }
 
-type InternalClient interface {
-	Do(req *fasthttp.Request, resp *fasthttp.Response) error
-}
-
-type HTTPClient interface {
-	Execute(request *Request) (*Response, error)
-}
-
 type Client struct {
 	opts     *clientOptions
 	internal InternalClient
