@@ -11,6 +11,8 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
+// TODO: spilt the internal test and the external test
+
 func TestNew(t *testing.T) {
 	instance, err := New()
 
