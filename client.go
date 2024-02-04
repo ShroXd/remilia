@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/valyala/fasthttp"
 )
 
@@ -61,6 +60,9 @@ func Headers(headers map[string]string) ClientOptionFn {
 
 func Timeout(timeout time.Duration) ClientOptionFn {
 	return func(opts *clientOptions) error {
+		if timeout < 0 {
+			return ErrInvalidTimeout
+		}
 		opts.timeout = timeout
 		return nil
 	}
@@ -93,20 +95,36 @@ func PostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
 	}
 }
 
-type Client struct {
-	opts     *clientOptions
-	internal InternalClient
+func InternalPreRequestHooks(hooks ...RequestHook) ClientOptionFn {
+	return func(opts *clientOptions) error {
+		opts.preRequestHooks = append(opts.preRequestHooks, hooks...)
+		return nil
+	}
 }
 
-func NewClient(client InternalClient, optFns ...ClientOptionFn) (*Client, error) {
+func InternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
+	return func(opts *clientOptions) error {
+		opts.postResponseHooks = append(opts.postResponseHooks, hooks...)
+		return nil
+	}
+}
+
+type Client struct {
+	opts       *clientOptions
+	internal   InternalClient
+	docCreator DocumentCreator
+}
+
+func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...ClientOptionFn) (*Client, error) {
 	opts, err := buildClientOptions(optFns)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		opts:     opts,
-		internal: client,
+		opts:       opts,
+		internal:   client,
+		docCreator: docCreator,
 	}, nil
 }
 
@@ -146,9 +164,12 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 		fasthttp.ReleaseRequest(req)
 	}()
 
-	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(resp.Body()))
+	doc, err := c.docCreator.NewDocumentFromReader(bytes.NewReader(resp.Body()))
 	if err != nil {
-
+		c.opts.logger.Error("Failed to build goquery document", LogContext{
+			"err": err,
+		})
+		return nil, err
 	}
 
 	response := &Response{

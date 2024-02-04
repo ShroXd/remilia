@@ -22,7 +22,7 @@ type Remilia struct {
 func New() (*Remilia, error) {
 	internalClient := newFastHTTPClient()
 
-	client, err := NewClient(internalClient)
+	client, err := NewClient(internalClient, &DefaultDocumentCreator{})
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +65,7 @@ func (r *Remilia) init() error {
 		internalClient := newFastHTTPClient()
 		client, err := NewClient(
 			internalClient,
+			&DefaultDocumentCreator{},
 			ClientLogger(r.logger),
 		)
 		if err != nil {

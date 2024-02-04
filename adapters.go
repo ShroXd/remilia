@@ -1,9 +1,11 @@
 package remilia
 
 import (
+	"io"
 	"os"
 	"testing"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/mock"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
@@ -36,6 +38,25 @@ func (mfs MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
 
 func (mfs MockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return mfs.OpenFileMock, mfs.OpenFileErr
+}
+
+type DocumentCreator interface {
+	NewDocumentFromReader(io.Reader) (*goquery.Document, error)
+}
+
+type DefaultDocumentCreator struct{}
+
+func (d DefaultDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
+	return goquery.NewDocumentFromReader(r)
+}
+
+type MockDocumentCreator struct {
+	Doc *goquery.Document
+	Err error
+}
+
+func (d MockDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
+	return d.Doc, d.Err
 }
 
 type LogContext map[string]interface{}

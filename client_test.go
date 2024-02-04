@@ -1,16 +1,19 @@
 package remilia
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
-func TestClientOptions(t *testing.T) {
-	t.Run("Successful build with valid options", func(t *testing.T) {
+func TestBuildClientOptions(t *testing.T) {
+	t.Run("Successfully run buildClientOptions with valid options", func(t *testing.T) {
 		opts, err := buildClientOptions([]ClientOptionFn{
 			BaseURL("http://example.com"),
 			Headers(map[string]string{
@@ -29,7 +32,7 @@ func TestClientOptions(t *testing.T) {
 		assert.Equal(t, &DefaultLogger{}, opts.logger, "Logger should be set correctly")
 	})
 
-	t.Run("Successful build with valid hooks", func(t *testing.T) {
+	t.Run("Successfully run buildClientOptions with valid hooks", func(t *testing.T) {
 		mockPreRequestHook := func(client *Client, req *Request) error {
 			return nil
 		}
@@ -46,96 +49,224 @@ func TestClientOptions(t *testing.T) {
 		assert.Len(t, opts.udPostResponseHooks, 2, "PostResponseHooks should have 2 hooks")
 	})
 
-	t.Run("Successful execute", func(t *testing.T) {
-		httpClient := new(MockInternalClient)
-		client, err := NewClient(httpClient)
-		assert.NoError(t, err, "NewClient should not return error")
+	t.Run("Failed to run buildClientOptions with invalid options", func(t *testing.T) {
+		opts, err := buildClientOptions([]ClientOptionFn{
+			Timeout(-1),
+		})
 
-		httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-			resp := args.Get(1).(*fasthttp.Response)
-			resp.SetBody([]byte("mock response"))
-		}).Return(nil)
-
-		request := &Request{}
-		response, err := client.Execute(request)
-
-		assert.NoError(t, err, "Execute should not return error")
-		assert.NotNil(t, response, "Response should not be nil")
-
-		httpClient.AssertExpectations(t)
-	})
-
-	t.Run("Successful execute with pre-request hooks", func(t *testing.T) {
-		httpClient := new(MockInternalClient)
-		client, err := NewClient(httpClient, PreRequestHooks(func(client *Client, req *Request) error {
-			req.Method = "GET"
-			return nil
-		}))
-		assert.NoError(t, err, "NewClient should not return error")
-
-		httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-			req := args.Get(0).(*fasthttp.Request)
-			assert.Equal(t, "GET", string(req.Header.Method()), "Method should be GET")
-		}).Return(nil)
-
-		request := &Request{}
-		response, err := client.Execute(request)
-
-		assert.NoError(t, err, "Execute should not return error")
-		assert.NotNil(t, response, "Response should not be nil")
-
-		httpClient.AssertExpectations(t)
+		assert.Nil(t, opts, "Options should be nil")
+		assert.Error(t, err, "buildClientOptions should return error")
+		assert.Equal(t, ErrInvalidTimeout, err, "Error should be ErrInvalidTimeout")
 	})
 }
 
-// func TestNewClient(t *testing.T) {
-// 	c := NewClient()
-// 	assert.NotNil(t, c, "NewClient should not return nil")
-// }
+func TestNewClient(t *testing.T) {
+	t.Run("Successful build", func(t *testing.T) {
+		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{})
 
-// func TestSetBaseURL(t *testing.T) {
-// 	client := NewClient().SetBaseURL("http://example.com")
-// 	assert.Equal(t, "http://example.com", client.BaseURL, "BaseURL should be set correctly")
-// }
+		assert.NotNil(t, client, "NewClient should not return nil")
+		assert.NoError(t, err, "NewClient should not return error")
+	})
 
-// func TestSetHeaders(t *testing.T) {
-// 	client := NewClient()
-// 	headers := map[string]string{
-// 		"Content-Type": "application/json",
-// 		"Accept":       "application/xml",
-// 	}
+	t.Run("Successful build with valid options", func(t *testing.T) {
+		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{}, Timeout(10*time.Second))
 
-// 	client.SetHeaders(headers)
+		assert.NotNil(t, client, "NewClient should not return nil")
+		assert.NoError(t, err, "NewClient should not return error")
+		assert.Equal(t, 10*time.Second, client.opts.timeout, "Timeout should be 10 seconds")
+	})
 
-// 	for key, val := range headers {
-// 		assert.Equal(t, val, client.Header.Get(key), "Header should be set correctly")
-// 	}
-// }
+	t.Run("Failed to run NewClient with invalid options", func(t *testing.T) {
+		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{}, Timeout(-1))
 
-// func TestSetTimeout(t *testing.T) {
-// 	client := NewClient().SetTimeout(10 * time.Second)
-// 	assert.Equal(t, 10*time.Second, client.Timeout, "Timeout should be set correctly")
-// }
+		assert.Nil(t, client, "Client should be nil")
+		assert.Error(t, err, "NewClient should return error")
+		assert.Equal(t, ErrInvalidTimeout, err, "Error should be ErrInvalidTimeout")
+	})
+}
 
-// // func TestSetProxy(t *testing.T) {
-// // 	client := NewClient().SetProxy("http://localhost:8080")
+func setupClient(t *testing.T, hooks ...ClientOptionFn) (*Client, *MockInternalClient) {
+	httpClient := new(MockInternalClient)
+	client, err := NewClient(httpClient, &DefaultDocumentCreator{}, hooks...)
+	assert.NoError(t, err)
+	return client, httpClient
+}
 
-// // 	transport, ok := client.internal.Transport.(*http.Transport)
-// // 	assert.True(t, ok, "Transport should be of type *http.Transport")
-// // 	assert.NotNil(t, transport, "Transport should not be nil")
+func assertExecuteSuccess(t *testing.T, client *Client, httpClient *MockInternalClient, setupMock func(*MockInternalClient)) {
+	if setupMock != nil {
+		setupMock(httpClient)
+	}
 
-// // 	dummyReq, err := http.NewRequest("GET", "http://example.com", nil)
-// // 	assert.NoError(t, err, "Error creating dummy request")
+	request := &Request{}
+	response, err := client.Execute(request)
 
-// // 	proxyURL, err := transport.Proxy(dummyReq)
-// // 	assert.NoError(t, err, "Error getting proxy URL")
-// // 	assert.NotNil(t, proxyURL, "Proxy should not be nil")
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
 
-// // 	assert.Equal(t, "http://localhost:8080", proxyURL.String(), "Proxy should be set correctly")
-// // }
+	httpClient.AssertExpectations(t)
+}
 
-// func TestSetLogger(t *testing.T) {
-// 	logger := &DefaultLogger{}
-// 	client := NewClient().SetLogger(logger)
-// 	assert.Equal(t, logger, client.logger, "Logger should be set correctly")
-// }
+func assertExecuteFailure(t *testing.T, client *Client, httpClient *MockInternalClient, expectedError string, setupMock func(*MockInternalClient)) {
+	if setupMock != nil {
+		setupMock(httpClient)
+	}
+
+	request := &Request{}
+	response, err := client.Execute(request)
+
+	assert.Nil(t, response)
+	assert.Error(t, err)
+	assert.Equal(t, expectedError, err.Error())
+
+	httpClient.AssertExpectations(t)
+}
+
+func TestExecute(t *testing.T) {
+	t.Run("Successful execute", func(t *testing.T) {
+		client, httpClient := setupClient(t)
+		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				resp := args.Get(1).(*fasthttp.Response)
+				resp.SetBody([]byte("mock response"))
+			}).Return(nil)
+		})
+	})
+
+	t.Run("Failed to send request", func(t *testing.T) {
+		core, recorded := observer.New(zap.DebugLevel)
+		zapLogger := zap.New(core)
+		logger := &DefaultLogger{internal: zapLogger}
+
+		client, httpClient := setupClient(t, ClientLogger(logger))
+		httpClient.On("Do", mock.Anything, mock.Anything).Return(errors.New("test network error"))
+
+		request := &Request{}
+		response, err := client.Execute(request)
+
+		assert.Nil(t, response, "Response should be nil")
+		assert.Error(t, err, "NewClient should return error")
+		assert.Equal(t, err.Error(), "test network error")
+
+		entries := recorded.All()
+		assert.Equal(t, 1, len(entries), "Expected one log entry to be recorded")
+		entry := entries[0]
+
+		assert.Equal(t, zap.ErrorLevel, entry.Level, "Incorrect log level")
+		assert.Equal(t, "Failed to execute request", entry.Message, "Incorrect message")
+		assert.Equal(t, "test network error", entry.ContextMap()["err"], "Incorrect context logged")
+	})
+
+	t.Run("Failed to build goquery document", func(t *testing.T) {
+		core, recorded := observer.New(zap.DebugLevel)
+		zapLogger := zap.New(core)
+		logger := &DefaultLogger{internal: zapLogger}
+
+		httpClient := new(MockInternalClient)
+		// TODO: figure difference between such mock struct and On
+		docCreator := &MockDocumentCreator{
+			Doc: nil,
+			Err: errors.New("test document error"),
+		}
+		client, err := NewClient(httpClient, docCreator, ClientLogger(logger))
+		assert.NoError(t, err)
+
+		httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
+
+		request := &Request{}
+		response, err := client.Execute(request)
+
+		assert.Nil(t, response, "Response should be nil")
+		assert.Error(t, err, "NewClient should return error")
+		assert.Equal(t, err.Error(), "test document error")
+
+		entries := recorded.All()
+		assert.Equal(t, 1, len(entries), "Expected one log entry to be recorded")
+		entry := entries[0]
+
+		assert.Equal(t, zap.ErrorLevel, entry.Level, "Incorrect log level")
+		assert.Equal(t, "Failed to build goquery document", entry.Message, "Incorrect message")
+		assert.Equal(t, "test document error", entry.ContextMap()["err"], "Incorrect context logged")
+	})
+
+	t.Run("Successful execution with pre-request hooks", func(t *testing.T) {
+		client, httpClient := setupClient(t, PreRequestHooks(func(client *Client, req *Request) error {
+			req.Method = "GET"
+			return nil
+		}))
+		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				req := args.Get(0).(*fasthttp.Request)
+				assert.Equal(t, "GET", string(req.Header.Method()))
+			}).Return(nil)
+		})
+	})
+
+	t.Run("Failed execution due to pre-request hooks returning error", func(t *testing.T) {
+		client, httpClient := setupClient(t, PreRequestHooks(func(client *Client, req *Request) error {
+			return errors.New("pre-request error")
+		}))
+		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
+	})
+
+	t.Run("Successful execution with post-response hooks", func(t *testing.T) {
+		client, httpClient := setupClient(t, PostResponseHooks(func(client *Client, resp *Response) error {
+			return nil
+		}))
+		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				req := args.Get(0).(*fasthttp.Request)
+				assert.Equal(t, "GET", string(req.Header.Method()), "Method should be GET")
+			}).Return(nil)
+		})
+	})
+
+	t.Run("Failed execution due to post-response hooks returning error", func(t *testing.T) {
+		client, httpClient := setupClient(t, PostResponseHooks(func(client *Client, resp *Response) error {
+			return errors.New("post-response error")
+		}))
+		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
+		})
+	})
+
+	t.Run("Successful execution with internal pre-request hooks", func(t *testing.T) {
+		client, httpClient := setupClient(t, InternalPreRequestHooks(func(client *Client, req *Request) error {
+			req.Method = "GET"
+			return nil
+		}))
+		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				req := args.Get(0).(*fasthttp.Request)
+				assert.Equal(t, "GET", string(req.Header.Method()))
+			}).Return(nil)
+		})
+	})
+
+	t.Run("Failed execution due to internal pre-request hooks returning error", func(t *testing.T) {
+		client, httpClient := setupClient(t, InternalPreRequestHooks(func(client *Client, req *Request) error {
+			return errors.New("pre-request error")
+		}))
+		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
+	})
+
+	t.Run("Successful execution with internal post-response hooks", func(t *testing.T) {
+		client, httpClient := setupClient(t, InternalPostResponseHooks(func(client *Client, resp *Response) error {
+			return nil
+		}))
+		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+				req := args.Get(0).(*fasthttp.Request)
+				assert.Equal(t, "GET", string(req.Header.Method()), "Method should be GET")
+			}).Return(nil)
+		})
+	})
+
+	t.Run("Failed execution due to internal post-response hooks returning error", func(t *testing.T) {
+		client, httpClient := setupClient(t, InternalPostResponseHooks(func(client *Client, resp *Response) error {
+			return errors.New("post-response error")
+		}))
+		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *MockInternalClient) {
+			httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
+		})
+	})
+}
