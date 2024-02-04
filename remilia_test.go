@@ -23,6 +23,38 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, instance.urlMatcher, "New() should return an instance with a non-nil urlMatcher")
 }
 
+func TestNewCurried(t *testing.T) {
+	t.Run("With default client and logger", func(t *testing.T) {
+		instance, err := newCurried(WithDefaultClient(), WithDefaultLogger())()
+
+		assert.NoError(t, err, "newCurried() should not return an error")
+		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")
+		assert.NotNil(t, instance.client, "newCurried() should return an instance with a non-nil client")
+		assert.NotNil(t, instance.logger, "newCurried() should return an instance with a non-nil logger")
+		assert.NotNil(t, instance.urlMatcher, "newCurried() should return an instance with a non-nil urlMatcher")
+	})
+
+	t.Run("Without client", func(t *testing.T) {
+		instance, err := newCurried(WithDefaultLogger())()
+
+		assert.NoError(t, err, "newCurried() should not return an error")
+		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")
+		assert.NotNil(t, instance.client, "newCurried() should return an instance with a non-nil client")
+		assert.NotNil(t, instance.logger, "newCurried() should return an instance with a non-nil logger")
+		assert.NotNil(t, instance.urlMatcher, "newCurried() should return an instance with a non-nil urlMatcher")
+	})
+
+	t.Run("Without logger", func(t *testing.T) {
+		instance, err := newCurried(WithDefaultClient())()
+
+		assert.NoError(t, err, "newCurried() should not return an error")
+		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")
+		assert.NotNil(t, instance.client, "newCurried() should return an instance with a non-nil client")
+		assert.NotNil(t, instance.logger, "newCurried() should return an instance with a non-nil logger")
+		assert.NotNil(t, instance.urlMatcher, "newCurried() should return an instance with a non-nil urlMatcher")
+	})
+}
+
 // TODO: update the unit test after finishing the implementation
 func TestNewFastHTTPClient(t *testing.T) {
 	client := newFastHTTPClient()
@@ -156,4 +188,16 @@ func TestSinkWrappedFunc(t *testing.T) {
 
 	assert.Equal(t, EmptyRequest(), req, "sinkFunc should return an empty request")
 	assert.NoError(t, err, "sinkFunc should not return an error")
+}
+
+func TestDo(t *testing.T) {
+	instance, _ := New()
+
+	fn := func(get Get[*Request], put, chew Put[*Request]) error {
+		return nil
+	}
+
+	err := instance.Do(NewProcessor(fn), NewProcessor(fn))
+
+	assert.NoError(t, err, "Do should not return an error")
 }

@@ -20,48 +20,59 @@ type Remilia struct {
 }
 
 func New() (*Remilia, error) {
-	internalClient := newFastHTTPClient()
-
-	client, err := NewClient(internalClient, &DefaultDocumentCreator{})
-	if err != nil {
-		return nil, err
-	}
-
-	r := &Remilia{
-		client: client,
-	}
-
-	if err := r.init(); err != nil {
-		return nil, err
-	}
-	return r, nil
+	return newCurried(WithDefaultClient(), WithDefaultLogger())()
 }
 
-func newFastHTTPClient() *fasthttp.Client {
-	return &fasthttp.Client{
-		ReadTimeout:              10 * time.Second,
-		WriteTimeout:             10 * time.Second,
-		NoDefaultUserAgentHeader: true,
-		// TODO: figure out how to set timeout for TCP connection
-		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+func newCurried(opts ...Option) func() (*Remilia, error) {
+	return func() (*Remilia, error) {
+		r := &Remilia{}
+
+		for _, opt := range opts {
+			opt(r)
+		}
+
+		if r.logger == nil {
+			logConfig := &LoggerConfig{
+				ID:           GetOrDefault(&r.ID, uuid.NewString()),
+				Name:         GetOrDefault(&r.Name, "defaultName"),
+				ConsoleLevel: DebugLevel,
+				FileLevel:    DebugLevel,
+			}
+
+			var err error
+			r.logger, err = createLogger(logConfig, &FileSystem{})
+			if err != nil {
+				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+			}
+		}
+
+		if r.client == nil {
+			internalClient := newFastHTTPClient()
+			client, err := NewClient(
+				internalClient,
+				&DefaultDocumentCreator{},
+				ClientLogger(r.logger),
+			)
+			if err != nil {
+				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+			}
+			r.client = client
+		}
+		r.urlMatcher = URLMatcher()
+		return r, nil
 	}
 }
 
-func (r *Remilia) init() error {
-	logConfig := &LoggerConfig{
-		ID:           GetOrDefault(&r.ID, uuid.NewString()),
-		Name:         GetOrDefault(&r.Name, "defaultName"),
-		ConsoleLevel: DebugLevel,
-		FileLevel:    DebugLevel,
-	}
+type Option func(*Remilia)
 
-	var err error
-	r.logger, err = createLogger(logConfig, &FileSystem{})
-	if err != nil {
-		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+func WithClient(client HTTPClient) Option {
+	return func(r *Remilia) {
+		r.client = client
 	}
+}
 
-	if r.client == nil {
+func WithDefaultClient() Option {
+	return func(r *Remilia) {
 		internalClient := newFastHTTPClient()
 		client, err := NewClient(
 			internalClient,
@@ -73,9 +84,39 @@ func (r *Remilia) init() error {
 		}
 		r.client = client
 	}
-	r.urlMatcher = URLMatcher()
+}
 
-	return nil
+func WithLogger(logger Logger) Option {
+	return func(r *Remilia) {
+		r.logger = logger
+	}
+}
+
+func WithDefaultLogger() Option {
+	return func(r *Remilia) {
+		logConfig := &LoggerConfig{
+			ID:           GetOrDefault(&r.ID, uuid.NewString()),
+			Name:         GetOrDefault(&r.Name, "defaultName"),
+			ConsoleLevel: DebugLevel,
+			FileLevel:    DebugLevel,
+		}
+
+		var err error
+		r.logger, err = createLogger(logConfig, &FileSystem{})
+		if err != nil {
+			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+		}
+	}
+}
+
+func newFastHTTPClient() *fasthttp.Client {
+	return &fasthttp.Client{
+		ReadTimeout:              10 * time.Second,
+		WriteTimeout:             10 * time.Second,
+		NoDefaultUserAgentHeader: true,
+		// TODO: figure out how to set timeout for TCP connection
+		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+	}
 }
 
 func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
