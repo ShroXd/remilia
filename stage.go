@@ -118,6 +118,7 @@ func (p *processor[T]) execute() error {
 	put := func(v T) {
 		p.outCh <- v
 	}
+	// TODO: fix the chew bug because it send value to closed channel
 	chew := func(v T) {
 		p.inCh <- v
 	}

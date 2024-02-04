@@ -51,15 +51,6 @@ func (p *pipeline[T]) execute() error {
 	return eg.Wait()
 }
 
-func Execute(producerDef ProcessorDef[any], stageDef ...ProcessorDef[any]) error {
-	pipeline, err := newPipeline[any](producerDef, stageDef...)
-	if err != nil {
-		return err
-	}
-
-	return pipeline.execute()
-}
-
 type executor interface {
 	execute() error
 	outputChannelCloser() func()

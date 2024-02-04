@@ -13,29 +13,73 @@ func MockProcessorDef() (*processor[any], error) {
 	return &processor[any]{}, nil
 }
 
-func TestNewPipelineSuccess(t *testing.T) {
-	_, err := newPipeline[any](MockProcessorDef, MockProcessorDef, MockProcessorDef)
-	assert.NoError(t, err, "newPipeline should not return error")
+func TestNewPipeline(t *testing.T) {
+	t.Run("NewPipeline with no stages", func(t *testing.T) {
+		_, err := newPipeline[any](MockProcessorDef, MockProcessorDef, MockProcessorDef)
+		assert.NoError(t, err, "newPipeline should not return error")
+	})
+
+	t.Run("NewPipeline with processor which returns error", func(t *testing.T) {
+		errorProducerDef := func() (*processor[any], error) {
+			return nil, errors.New("producer error")
+		}
+		_, err := newPipeline[any](errorProducerDef, MockProcessorDef)
+		assert.Error(t, err, "newPipeline should have failed with producer error")
+	})
+
+	t.Run("NewPipeline with stage which returns error", func(t *testing.T) {
+		errorStageDef := func() (*processor[any], error) {
+			return nil, errors.New("stage error")
+		}
+		normalStageDef := func() (*processor[any], error) {
+			return &processor[any]{}, nil
+		}
+
+		_, err := newPipeline[any](MockProcessorDef, errorStageDef, normalStageDef)
+		assert.Error(t, err, "newPipeline should have failed with stage error")
+	})
 }
 
-func TestNewPipelineProducerError(t *testing.T) {
-	errorProducerDef := func() (*processor[any], error) {
-		return nil, errors.New("producer error")
-	}
-	_, err := newPipeline[any](errorProducerDef, MockProcessorDef)
-	assert.Error(t, err, "newPipeline should have failed with producer error")
-}
+func TestPipelineExecute(t *testing.T) {
+	t.Run("Successful execute", func(t *testing.T) {
+		generator := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+			put(1)
+			return nil
+		})
 
-func TestNewPipelineStageError(t *testing.T) {
-	errorStageDef := func() (*processor[any], error) {
-		return nil, errors.New("stage error")
-	}
-	normalStageDef := func() (*processor[any], error) {
-		return &processor[any]{}, nil
-	}
+		processor := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+			item, ok := get()
+			if !ok {
+				return nil
+			}
+			put(item * 2)
+			// TODO: chew has bug with closed channel
+			// chew(item * 3)
+			return nil
+		})
 
-	_, err := newPipeline[any](MockProcessorDef, errorStageDef, normalStageDef)
-	assert.Error(t, err, "newPipeline should have failed with stage error")
+		pipeline, _ := newPipeline[int](generator, processor)
+		err := pipeline.execute()
+
+		assert.NoError(t, err, "execute should not return error")
+	})
+
+	t.Run("Failed execute when any stage returns error", func(t *testing.T) {
+		generator := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+			put(1)
+			return nil
+		})
+
+		errProcessor := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+			return errors.New("test error")
+		})
+
+		pipeline, _ := newPipeline[int](generator, errProcessor)
+		err := pipeline.execute()
+
+		assert.Error(t, err, "execute should return error")
+		assert.Equal(t, "test error", err.Error(), "execute should return correct error")
+	})
 }
 
 type mockExecutor struct {
