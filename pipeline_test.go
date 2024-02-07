@@ -101,6 +101,11 @@ func (m *mockExecutor) exhaustInputChannel() {
 	m.Called()
 }
 
+func (m *mockExecutor) concurrency() uint {
+	args := m.Called()
+	return args.Get(0).(uint)
+}
+
 func TestExecutor(t *testing.T) {
 	t.Run("Successful execute", func(t *testing.T) {
 		mockExec := new(mockExecutor)
@@ -109,6 +114,7 @@ func TestExecutor(t *testing.T) {
 		mockExec.On("execute").Return(nil)
 		mockExec.On("outputChannelCloser").Return(func() {})
 		mockExec.On("exhaustInputChannel").Return()
+		mockExec.On("concurrency").Return(uint(1))
 
 		execute(eg, mockExec)
 		err := eg.Wait()
@@ -124,6 +130,7 @@ func TestExecutor(t *testing.T) {
 		mockExec.On("execute").Return(errors.New("test execute error"))
 		mockExec.On("outputChannelCloser").Return(func() {})
 		mockExec.On("exhaustInputChannel").Return()
+		mockExec.On("concurrency").Return(uint(1))
 
 		execute(eg, mockExec)
 		err := eg.Wait()

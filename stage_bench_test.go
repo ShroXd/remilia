@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func BenchmarkProcessor(b *testing.B) {
+func BenchmarkProcessorExecution(b *testing.B) {
 	tests := []struct {
 		name          string
 		concurrency   int

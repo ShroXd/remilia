@@ -36,6 +36,9 @@ func TestCommonStage(t *testing.T) {
 		// the output channel of current stage is the input channel of next stage
 		inCh := make(chan int)
 		stage := &commonStage[int]{
+			opts: &stageOptions{
+				concurrency: uint(1),
+			},
 			outCh: inCh,
 		}
 		closer := stage.outputChannelCloser()
@@ -48,6 +51,9 @@ func TestCommonStage(t *testing.T) {
 	t.Run("exhaustInputChannel should exhaust input channel", func(t *testing.T) {
 		inCh := make(chan int)
 		stage := &commonStage[int]{
+			opts: &stageOptions{
+				concurrency: uint(1),
+			},
 			inCh: inCh,
 		}
 
@@ -120,6 +126,9 @@ func TestProcessor(t *testing.T) {
 
 		processor, _ := NewProcessor[int](workFn, InputBufferSize(1))()
 		receiver := &commonStage[int]{
+			opts: &stageOptions{
+				concurrency: uint(1),
+			},
 			inCh: make(chan int, 1),
 		}
 		defer close(receiver.inCh)
@@ -179,6 +188,9 @@ func TestFlow(t *testing.T) {
 
 			flow, _ := NewFlow[int](fn, InputBufferSize(1))()
 			receiver := &commonStage[int]{
+				opts: &stageOptions{
+					concurrency: uint(1),
+				},
 				inCh: make(chan int, 1),
 			}
 			flow.outCh = receiver.inCh
@@ -213,6 +225,9 @@ func TestFlow(t *testing.T) {
 
 			flow, _ := NewFlow[int](fn, InputBufferSize(1))()
 			receiver := &commonStage[int]{
+				opts: &stageOptions{
+					concurrency: uint(1),
+				},
 				inCh: make(chan int, 1),
 			}
 			flow.outCh = receiver.inCh
@@ -247,6 +262,9 @@ func TestFlow(t *testing.T) {
 
 			flow, _ := NewFlow[int](fn, InputBufferSize(1))()
 			receiver := &commonStage[int]{
+				opts: &stageOptions{
+					concurrency: uint(1),
+				},
 				inCh: make(chan int, 3),
 			}
 			flow.outCh = receiver.inCh

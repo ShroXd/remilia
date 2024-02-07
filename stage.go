@@ -1,5 +1,7 @@
 package remilia
 
+import "sync"
+
 // 1. recyling put
 // 2. stage network request fn
 
@@ -12,7 +14,9 @@ type stageOptions struct {
 type StageOptionFn OptionFn[*stageOptions]
 
 func buildStageOptions(optFns []StageOptionFn) (*stageOptions, error) {
-	so := &stageOptions{}
+	so := &stageOptions{
+		concurrency: uint(1),
+	}
 	for _, optFn := range optFns {
 		if err := optFn(so); err != nil {
 			return nil, err
@@ -49,14 +53,22 @@ func InputBufferSize(size uint) StageOptionFn {
 }
 
 type commonStage[T any] struct {
-	opts  *stageOptions
-	inCh  chan T
-	outCh chan<- T
+	opts        *stageOptions
+	emitToOutCh bool
+	inCh        chan T
+	outCh       chan<- T
 }
 
 func (cs commonStage[T]) outputChannelCloser() func() {
+	instances := cs.concurrency()
+	var mu sync.Mutex
 	return func() {
-		close(cs.outCh)
+		mu.Lock()
+		defer mu.Unlock()
+		instances--
+		if instances == 0 {
+			close(cs.outCh)
+		}
 	}
 }
 
@@ -88,14 +100,19 @@ type processor[T any] struct {
 func buildProcessor[T any](fn WorkFn[T], opts *stageOptions) *processor[T] {
 	p := &processor[T]{
 		commonStage: commonStage[T]{
-			opts: opts,
-			inCh: make(chan T, opts.inputBufferSize),
+			opts:        opts,
+			emitToOutCh: true,
+			inCh:        make(chan T, opts.inputBufferSize),
 		},
 		fn: fn,
 	}
 
 	p.getter = func() (out T, ok bool) {
 		select {
+		// case out = <-p.inCh:
+		// 	return out, true
+		// default:
+		// 	return out, false
 		case out, ok = <-p.inCh:
 			return out, ok
 		}
@@ -116,7 +133,9 @@ func NewProcessor[T any](fn WorkFn[T], optFns ...StageOptionFn) ProcessorDef[T] 
 
 func (p *processor[T]) execute() error {
 	put := func(v T) {
-		p.outCh <- v
+		if p.emitToOutCh {
+			p.outCh <- v
+		}
 	}
 	// TODO: fix the chew bug because it send value to closed channel
 	chew := func(v T) {
@@ -137,8 +156,9 @@ type flow[T any] struct {
 func buildFlow[T any](fn FlowFn[T], opts *stageOptions) *flow[T] {
 	return &flow[T]{
 		commonStage: commonStage[T]{
-			opts: opts,
-			inCh: make(chan T, opts.inputBufferSize),
+			opts:        opts,
+			emitToOutCh: true,
+			inCh:        make(chan T, opts.inputBufferSize),
 		},
 		fn: fn,
 	}
@@ -166,7 +186,9 @@ func (s *flow[T]) executeOnce() (ok bool, err error) {
 		return false, err
 	}
 
-	s.outCh <- out
+	if err == nil && s.emitToOutCh {
+		s.outCh <- out
+	}
 	return ok, err
 }
 

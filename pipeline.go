@@ -1,6 +1,8 @@
 package remilia
 
-import "golang.org/x/sync/errgroup"
+import (
+	"golang.org/x/sync/errgroup"
+)
 
 type pipeline[T any] struct {
 	producer *processor[T]
@@ -36,6 +38,7 @@ func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T
 
 	// TODO: support recycling pipeline
 	lastStage.outCh = p.producer.inCh
+	lastStage.emitToOutCh = false
 
 	return p, nil
 }
@@ -55,16 +58,19 @@ type executor interface {
 	execute() error
 	outputChannelCloser() func()
 	exhaustInputChannel()
+	concurrency() uint
 }
 
 func execute(eg *errgroup.Group, executor executor) {
 	outputChannelCloser := executor.outputChannelCloser()
 
-	eg.Go(func() error {
-		err := executor.execute()
-		outputChannelCloser()
-		executor.exhaustInputChannel()
+	for i := uint(0); i < executor.concurrency(); i++ {
+		eg.Go(func() error {
+			err := executor.execute()
+			outputChannelCloser()
+			executor.exhaustInputChannel()
 
-		return err
-	})
+			return err
+		})
+	}
 }
