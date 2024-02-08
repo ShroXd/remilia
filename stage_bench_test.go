@@ -25,8 +25,16 @@ func BenchmarkProcessorExecution(b *testing.B) {
 
 		// Change Data Size
 		{"Concurrency=100, BufferSize=100, DataSize=100", 100, 100, 100, 10},
-		{"Concurrency=100, BufferSize=100, DataSize=1000", 100, 100, 1000, 10},
+		{"Concurrency=100, BufferSize=101, DataSize=1000", 100, 101, 1000, 10},
 		// {"Concurrency=100, BufferSize=100, DataSize=10000", 100, 100, 10000, 10},
+
+		// More concurrency on large data size
+		// {"Concurrency=100, BufferSize=10, DataSize=100000", 100, 10, 100000, 10},
+		// {"Concurrency=1000, BufferSize=10, DataSize=100000", 1000, 10, 100000, 10},
+
+		// More buffer size on large data size
+		// {"Concurrency=100, BufferSize=1000, DataSize=100000", 10, 100, 100000, 10},
+		// {"Concurrency=100, BufferSize=10000, DataSize=100000", 10, 1000, 100000, 10},
 	}
 
 	for _, tc := range tests {

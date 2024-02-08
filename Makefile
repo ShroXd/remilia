@@ -4,6 +4,7 @@ BENCHMARK_DIR=benchmarks
 COVER_PROFILE=$(OUTPUT_DIR)/coverage.out
 CPU_PROFILE=$(OUTPUT_DIR)/cpu.pprof
 MEM_PROFILE=$(OUTPUT_DIR)/mem.pprof
+TRACE_PROFILE=$(OUTPUT_DIR)/trace.pprof
 
 $(OUTPUT_DIR) $(BENCHMARK_DIR):
 	@echo "📂 Creating directory $@"
@@ -25,14 +26,14 @@ cover: test
 	@echo "📊 Generating coverage report..."
 	@go tool cover -html=$(COVER_PROFILE)
 
-benchmark: $(benchmark_dir)
+benchmark: $(OUTPUT_DIR)
 	@echo "⚖️ running benchmarks..."
 	@branch=$$(git rev-parse --abbrev-ref head); \
 	commit=$$(git rev-parse --short head); \
 	tag=$$(git describe --tags --exact-match $$commit 2>/dev/null); \
 	file_tag=$${tag:+_$${tag}}; \
 	file_name="benchmarks/bench_$${branch}_$${commit}$${file_tag}.txt"; \
-	go list ./... | grep -v "/examples" | grep -v "/mock" | xargs go test -bench . | tee $$file_name
+	go list ./... | grep -v "/examples" | grep -v "/mock" | xargs go test -bench . -benchmem -cpuprofile $(CPU_PROFILE) -memprofile $(MEM_PROFILE) -trace $(TRACE_PROFILE) | tee $$file_name
 
 profile: build
 	@echo "📈 Running the program and collecting performance data..."

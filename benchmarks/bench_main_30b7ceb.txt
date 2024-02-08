@@ -1,0 +1,26 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/ShroXd/remilia
+BenchmarkFanIn/Small_Data-12      	  293660	      3879 ns/op	     328 B/op	      11 allocs/op
+BenchmarkFanIn/Medium_Data-12     	  292561	      3734 ns/op	     328 B/op	      11 allocs/op
+BenchmarkFanIn/Large_Data-12      	  310014	      3729 ns/op	     328 B/op	      11 allocs/op
+BenchmarkFanIn/Huge_Data-12       	  317967	      3738 ns/op	     328 B/op	      11 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=10,_DataSize=1000-12         	    2728	    437585 ns/op	    1552 B/op	      62 allocs/op
+BenchmarkPipelineExecution/Concurrency=100,_BufferSize=10,_DataSize=1000-12        	    1138	   1012032 ns/op	   12421 B/op	     512 allocs/op
+BenchmarkPipelineExecution/Concurrency=1000,_BufferSize=10,_DataSize=1000-12       	     679	   2094898 ns/op	  121498 B/op	    5024 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=100,_DataSize=1000-12        	    2455	    459778 ns/op	    1554 B/op	      62 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=1000,_DataSize=1000-12       	    2569	    443786 ns/op	    1549 B/op	      62 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=10,_DataSize=10000-12        	     280	   4526251 ns/op	    1553 B/op	      62 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=10,_DataSize=100000-12       	      27	  45774184 ns/op	    2042 B/op	      64 allocs/op
+BenchmarkPipelineExecution/Concurrency=100,_BufferSize=10,_DataSize=100000-12      	      16	  69773836 ns/op	   13339 B/op	     522 allocs/op
+BenchmarkPipelineExecution/Concurrency=10,_BufferSize=100,_DataSize=100000-12      	      19	  69166515 ns/op	   12681 B/op	     515 allocs/op
+BenchmarkProcessorExecution/Concurrency=10,_BufferSize=100,_DataSize=1000-12       	   98694	     11649 ns/op	    6972 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=100,_DataSize=1000-12      	  124322	     14467 ns/op	    7106 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=1000,_BufferSize=100,_DataSize=1000-12     	  115783	     11385 ns/op	    7123 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=10,_DataSize=1000-12       	  110312	     11514 ns/op	    6953 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=100,_DataSize=1000#01-12   	  107785	     12030 ns/op	    7080 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=1000,_DataSize=1000-12     	  107746	     11943 ns/op	    7222 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=100,_DataSize=100-12       	   97174	     11751 ns/op	    6495 B/op	      58 allocs/op
+BenchmarkProcessorExecution/Concurrency=100,_BufferSize=101,_DataSize=1000-12      	   89673	     11889 ns/op	    7592 B/op	      58 allocs/op
+PASS
+ok  	github.com/ShroXd/remilia	408.845s

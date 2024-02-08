@@ -23,6 +23,12 @@ func BenchmarkPipelineExecution(b *testing.B) {
 		// Change Data Size
 		{"Concurrency=10, BufferSize=10, DataSize=10000", 10, 10, 10000},
 		{"Concurrency=10, BufferSize=10, DataSize=100000", 10, 10, 100000},
+
+		// More concurrency on large data size
+		{"Concurrency=100, BufferSize=10, DataSize=100000", 100, 10, 100000},
+
+		// More buffer size on large data size
+		{"Concurrency=10, BufferSize=100, DataSize=100000", 100, 100, 100000},
 	}
 
 	for _, tc := range tests {

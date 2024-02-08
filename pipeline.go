@@ -36,6 +36,9 @@ func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T
 		lastStage = stage
 	}
 
+	// INS: insert stage into pipeline, between producers
+	// the stage accept multiple values from producer and use FanOut to next producer
+
 	// TODO: support recycling pipeline
 	lastStage.outCh = p.producer.inCh
 	lastStage.emitToOutCh = false
@@ -46,6 +49,7 @@ func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T
 func (p *pipeline[T]) execute() error {
 	var eg errgroup.Group
 
+	// TODO: currently it's only horizontal concurrency, we need to support vertical to improve the performance
 	execute(&eg, p.producer)
 	for _, stage := range p.stages {
 		execute(&eg, stage)
