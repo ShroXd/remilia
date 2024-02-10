@@ -1,4 +1,5 @@
-BINARY_NAME=lib
+DEV_BINARY_NAME=dev
+MOCKSERVER_BINARY_NAME=mockserver
 OUTPUT_DIR=out
 BENCHMARK_DIR=benchmarks
 COVER_PROFILE=$(OUTPUT_DIR)/coverage.out
@@ -14,17 +15,30 @@ $(OUTPUT_DIR) $(BENCHMARK_DIR):
 	@echo "📂 Creating directory $@"
 	@mkdir -p $@
 
-build: $(OUTPUT_DIR)
-	@echo "🚀 Building the project..."
-	go build -o $(OUTPUT_DIR)/$(BINARY_NAME) ./examples/dev.go
+release:
+	@git tag -a v$(version) -m "Release version $(version)"
+	@git push origin v$(version)
 
-run: build
-	@echo "🏃‍♀️ Running the binary..."
-	@./$(OUTPUT_DIR)/$(BINARY_NAME)
+
+build-dev: $(OUTPUT_DIR)
+	@echo "🚀 Building the development binary..."
+	go build -o $(OUTPUT_DIR)/$(DEV_BINARY_NAME) ./cmd/dev
+
+build-mockserver: $(OUTPUT_DIR)
+	@echo "🚀 Building the mock server binary..."
+	go build -o $(OUTPUT_DIR)/$(MOCKSERVER_BINARY_NAME) ./cmd/mockserver
+
+run-dev: build-dev
+	@echo "🏃‍♀️ Running the development binary..."
+	@./$(OUTPUT_DIR)/$(DEV_BINARY_NAME)
+
+run-mockserver: build-mockserver
+	@echo "🏃 Running the mock server..."
+	@./$(OUTPUT_DIR)/$(MOCKSERVER_BINARY_NAME)
 
 test: $(OUTPUT_DIR)
 	@echo "🧪 Running tests..."
-	go test -coverprofile=$(COVER_PROFILE) -coverpkg=`go list ./... | grep -v "/mock\|/examples"`
+	go test -coverprofile=$(COVER_PROFILE) -coverpkg=`go list ./... | grep -v "/cmd\|/internal"`
 
 cover: test
 	@echo "📊 Generating coverage report..."
@@ -41,7 +55,7 @@ benchmark: $(OUTPUT_DIR)
 
 profile: build
 	@echo "📈 Running the program and collecting performance data..."
-	@./$(OUTPUT_DIR)/$(BINARY_NAME) 2> /dev/null
+	@./$(OUTPUT_DIR)/$(DEV_BINARY_NAME) 2> /dev/null
 	@echo "📊 CPU and memory profile files generated in $(OUTPUT_DIR)/"
 
 view-cpu:

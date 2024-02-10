@@ -24,30 +24,24 @@ func main() {
 
 	rem, _ := remilia.New()
 
-	initURL := "https://go.dev/doc/"
+	initURL := "http://localhost:6657/largehtml"
 
 	firstParser := func(in *goquery.Document, put remilia.Put[string]) {
-		in.Find("#developing-modules h3 a").Each(func(i int, s *goquery.Selection) {
-			href, exists := s.Attr("href")
-			if exists {
-				// fmt.Println(href)
-			}
-
-			generated := "https://go.dev" + href
-			put(generated)
+		in.Find("h1").Each(func(i int, s *goquery.Selection) {
+			fmt.Println(s.Text())
 		})
 	}
 
-	secondParser := func(in *goquery.Document, put remilia.Put[string]) {
-		title := in.Find("h1").First().Text()
-		fmt.Println("Article title: ", title)
-	}
+	// secondParser := func(in *goquery.Document, put remilia.Put[string]) {
+	// 	title := in.Find("h1").First().Text()
+	// 	fmt.Println("Article title: ", title)
+	// }
 
 	producer := rem.Just(initURL)
 	first := rem.Relay(firstParser)
-	second := rem.Relay(secondParser)
+	// second := rem.Relay(secondParser)
 
-	if err := rem.Do(producer, first, second); err != nil {
+	if err := rem.Do(producer, first); err != nil {
 		fmt.Println("Error: ", err)
 	}
 
