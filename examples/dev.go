@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"runtime/pprof"
 
 	"github.com/PuerkitoBio/goquery"
@@ -11,27 +13,14 @@ import (
 )
 
 func main() {
-	f, err := os.Create("out/cpu.pprof")
-	if err != nil {
-		panic(err)
-	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
 
-	work()
-
-	pprof.StopCPUProfile()
-	f.Close()
-
-	f, err = os.Create("out/mem.pprof")
-	if err != nil {
-		panic(err)
-	}
-	pprof.WriteHeapProfile(f)
-	f.Close()
-}
-
-func work() {
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+	startCPUProfile()
+	defer stopCPUProfile()
 
 	rem, _ := remilia.New()
 
@@ -61,4 +50,67 @@ func work() {
 	if err := rem.Do(producer, first, second); err != nil {
 		fmt.Println("Error: ", err)
 	}
+
+	writeMemProfile()
+	writeBlockProfile()
+	writeGoroutineProfile()
+	writeThreadcreateProfile()
+	writeMutexProfile()
+}
+
+func startCPUProfile() {
+	f, err := os.Create("out/cpu.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.StartCPUProfile(f)
+}
+
+func stopCPUProfile() {
+	pprof.StopCPUProfile()
+}
+
+func writeMemProfile() {
+	f, err := os.Create("out/mem.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.WriteHeapProfile(f)
+	f.Close()
+}
+
+func writeBlockProfile() {
+	f, err := os.Create("out/block.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.Lookup("block").WriteTo(f, 0)
+	f.Close()
+}
+
+func writeGoroutineProfile() {
+	f, err := os.Create("out/goroutine.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.Lookup("goroutine").WriteTo(f, 0)
+	f.Close()
+}
+
+func writeThreadcreateProfile() {
+	f, err := os.Create("out/threadcreate.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.Lookup("threadcreate").WriteTo(f, 0)
+	f.Close()
+}
+
+func writeMutexProfile() {
+	f, err := os.Create("out/mutex.pprof")
+	if err != nil {
+		panic(err)
+	}
+	pprof.Lookup("mutex").WriteTo(f, 0)
+	f.Close()
 }

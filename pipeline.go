@@ -49,7 +49,7 @@ func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T
 func (p *pipeline[T]) execute() error {
 	var eg errgroup.Group
 
-	// TODO: currently it's only horizontal concurrency, we need to support vertical to improve the performance
+	// TODO: currently it's only horizontal concurrency, we need to support vertical to improve the
 	execute(&eg, p.producer)
 	for _, stage := range p.stages {
 		execute(&eg, stage)
