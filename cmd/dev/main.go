@@ -22,34 +22,42 @@ func main() {
 	startCPUProfile()
 	defer stopCPUProfile()
 
-	rem, _ := remilia.New()
-
-	initURL := "http://localhost:6657/largehtml"
-
-	firstParser := func(in *goquery.Document, put remilia.Put[string]) {
-		in.Find("h1").Each(func(i int, s *goquery.Selection) {
-			fmt.Println(s.Text())
-		})
-	}
-
-	// secondParser := func(in *goquery.Document, put remilia.Put[string]) {
-	// 	title := in.Find("h1").First().Text()
-	// 	fmt.Println("Article title: ", title)
-	// }
-
-	producer := rem.Just(initURL)
-	first := rem.Relay(firstParser)
-	// second := rem.Relay(secondParser)
-
-	if err := rem.Do(producer, first); err != nil {
-		fmt.Println("Error: ", err)
-	}
+	work()
 
 	writeMemProfile()
 	writeBlockProfile()
 	writeGoroutineProfile()
 	writeThreadcreateProfile()
 	writeMutexProfile()
+}
+
+func work() {
+	rem, _ := remilia.New()
+
+	initURL := "http://localhost:6657/page/1"
+	baseURL := "http://localhost:6657"
+
+	firstParser := func(in *goquery.Document, put remilia.Put[string]) {
+		in.Find("a").Each(func(i int, s *goquery.Selection) {
+			href, ok := s.Attr("href")
+			if ok {
+				put(baseURL + href)
+			}
+		})
+	}
+
+	secondParser := func(in *goquery.Document, put remilia.Put[string]) {
+		title := in.Find("p").First().Text()
+		fmt.Println("Article title: ", title)
+	}
+
+	producer := rem.Just(initURL)
+	first := rem.Relay(firstParser)
+	second := rem.Relay(secondParser)
+
+	if err := rem.Do(producer, first, second); err != nil {
+		fmt.Println("Error: ", err)
+	}
 }
 
 func startCPUProfile() {
