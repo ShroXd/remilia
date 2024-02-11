@@ -113,7 +113,7 @@ func TestProcessor(t *testing.T) {
 		})
 	})
 
-	t.Run("Successful execute", func(t *testing.T) {
+	t.Run("Successful execute once", func(t *testing.T) {
 		workFn := func(get Get[int], put Put[int], chew Put[int]) error {
 			item, ok := get()
 			if !ok {
@@ -131,30 +131,90 @@ func TestProcessor(t *testing.T) {
 			},
 			inCh: make(chan int, 1),
 		}
-		defer close(receiver.inCh)
 		processor.outCh = receiver.inCh
 
 		var wg sync.WaitGroup
 		wg.Add(1)
 
 		go func() {
-			defer wg.Done()
+			defer func() {
+				close(processor.inCh)
+				close(receiver.inCh)
+				wg.Done()
+			}()
 			err := processor.execute()
 			assert.NoError(t, err, "Processor should not return error")
 		}()
 
 		processor.inCh <- 1
-		defer close(processor.inCh)
 
 		wg.Wait()
 
-		result, ok := <-receiver.inCh
+		value, ok := <-receiver.inCh
 		assert.True(t, ok, "Receiver should have received a value")
-		assert.Equal(t, 2, result, "Receiver should have received 2")
+		assert.Equal(t, 2, value, "Receiver should have received 2")
 
-		value, ok := <-processor.inCh
+		value, ok = <-processor.inCh
 		assert.True(t, ok, "Processor should have received a value")
 		assert.Equal(t, 3, value, "Processor should have received 3")
+	})
+
+	t.Run("Successful execution for all received value", func(t *testing.T) {
+		hasChewed := false
+
+		workFn := func(get Get[int], put Put[int], chew Put[int]) error {
+			for i := 0; i < 2; i++ {
+				item, ok := get()
+				if !ok {
+					return nil
+				}
+				put(item * 2)
+				if !hasChewed {
+					chew(item * 3)
+					hasChewed = true
+				}
+			}
+
+			return nil
+		}
+
+		processor, _ := NewProcessor[int](workFn, InputBufferSize(2))()
+		receiver := &commonStage[int]{
+			opts: &stageOptions{
+				concurrency: uint(1),
+			},
+			inCh: make(chan int, 2),
+		}
+		processor.outCh = receiver.inCh
+
+		var wg sync.WaitGroup
+
+		wg.Add(1)
+		go func() {
+			defer func() {
+				close(receiver.inCh)
+				close(processor.inCh)
+				wg.Done()
+			}()
+			err := processor.execute()
+			assert.NoError(t, err, "Processor should not return error")
+		}()
+
+		processor.inCh <- 1
+
+		wg.Wait()
+
+		value, ok := <-receiver.inCh
+		assert.True(t, ok, "Receiver should have received a value")
+		assert.Equal(t, 2, value, "Receiver should have received 2")
+
+		value, ok = <-receiver.inCh
+		assert.True(t, ok, "Processor should have received a value")
+		assert.Equal(t, 6, value, "Processor should have received 3")
+
+		value, ok = <-processor.inCh
+		assert.False(t, ok, "Processor should not have received a value")
+		assert.Equal(t, 0, value, "Processor should have received 0")
 	})
 }
 
