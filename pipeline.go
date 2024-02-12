@@ -6,10 +6,10 @@ import (
 
 type pipeline[T any] struct {
 	producer *processor[T]
-	stages   []*processor[T]
+	stages   []*stage[T]
 }
 
-func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T]) (*pipeline[T], error) {
+func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...StageDef[T]) (*pipeline[T], error) {
 	p := &pipeline[T]{}
 	var err error
 
@@ -19,7 +19,7 @@ func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...ProcessorDef[T
 		return nil, err
 	}
 
-	p.stages = make([]*processor[T], len(stageDefs))
+	p.stages = make([]*stage[T], len(stageDefs))
 	for idx, stageDef := range stageDefs {
 		stage, err := stageDef()
 		if err != nil {

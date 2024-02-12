@@ -51,7 +51,7 @@ benchmark: $(OUTPUT_DIR)
 	tag=$$(git describe --tags --exact-match $$commit 2>/dev/null); \
 	file_tag=$${tag:+_$${tag}}; \
 	file_name="benchmarks/bench_$${branch}_$${commit}$${file_tag}.txt"; \
-	go list ./... | grep -v "/examples" | grep -v "/mock" | xargs go test -bench . -benchmem -cpuprofile $(CPU_PROFILE) -memprofile $(MEM_PROFILE) | tee $$file_name
+	go list ./... | grep -v "/cmd\|/internal" | grep -v "/mock" | xargs go test -bench . -benchmem -cpuprofile $(CPU_PROFILE) -memprofile $(MEM_PROFILE) | tee $$file_name
 
 profile: build
 	@echo "📈 Running the program and collecting performance data..."

@@ -13,9 +13,13 @@ func MockProcessorDef() (*processor[any], error) {
 	return &processor[any]{}, nil
 }
 
+func MockStageDef() (*stage[any], error) {
+	return &stage[any]{}, nil
+}
+
 func TestNewPipeline(t *testing.T) {
 	t.Run("NewPipeline with no stages", func(t *testing.T) {
-		_, err := newPipeline[any](MockProcessorDef, MockProcessorDef, MockProcessorDef)
+		_, err := newPipeline[any](MockProcessorDef, MockStageDef, MockStageDef)
 		assert.NoError(t, err, "newPipeline should not return error")
 	})
 
@@ -23,16 +27,16 @@ func TestNewPipeline(t *testing.T) {
 		errorProducerDef := func() (*processor[any], error) {
 			return nil, errors.New("producer error")
 		}
-		_, err := newPipeline[any](errorProducerDef, MockProcessorDef)
+		_, err := newPipeline[any](errorProducerDef, MockStageDef)
 		assert.Error(t, err, "newPipeline should have failed with producer error")
 	})
 
 	t.Run("NewPipeline with stage which returns error", func(t *testing.T) {
-		errorStageDef := func() (*processor[any], error) {
+		errorStageDef := func() (*stage[any], error) {
 			return nil, errors.New("stage error")
 		}
-		normalStageDef := func() (*processor[any], error) {
-			return &processor[any]{}, nil
+		normalStageDef := func() (*stage[any], error) {
+			return &stage[any]{}, nil
 		}
 
 		_, err := newPipeline[any](MockProcessorDef, errorStageDef, normalStageDef)
@@ -47,12 +51,8 @@ func TestPipelineExecute(t *testing.T) {
 			return nil
 		})
 
-		processor := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
-			item, ok := get()
-			if !ok {
-				return nil
-			}
-			put(item * 2)
+		processor := NewStage[int](func(in int, put, chew Put[int]) error {
+			put(in * 2)
 			// TODO: chew has bug with closed channel
 			// chew(item * 3)
 			return nil
@@ -70,7 +70,7 @@ func TestPipelineExecute(t *testing.T) {
 			return nil
 		})
 
-		errProcessor := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+		errProcessor := NewStage[int](func(in int, put, chew Put[int]) error {
 			return errors.New("test error")
 		})
 

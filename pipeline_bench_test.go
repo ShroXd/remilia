@@ -70,16 +70,9 @@ func BenchmarkPipelineExecution(b *testing.B) {
 					return nil
 				})
 
-				processor := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
-					for {
-						item, ok := get()
-						if !ok {
-							return nil
-						}
-						put(item * 2)
-						// TODO: chew has bug with closed channel
-						// chew(item * 3)
-					}
+				processor := NewStage[int](func(in int, put, chew Put[int]) error {
+					put(in * 2)
+					return nil
 				}, Concurrency(uint(tc.concurrency)))
 
 				pipeline, _ := newPipeline[int](generator, processor)

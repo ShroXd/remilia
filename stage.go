@@ -199,3 +199,62 @@ func (s *flow[T]) execute() error {
 
 	return err
 }
+
+type StageFunc[T any] func(in T, put Put[T], chew Put[T]) error
+type StageDef[T any] func() (*stage[T], error)
+
+type stage[T any] struct {
+	commonStage[T]
+	fn   StageFunc[T]
+	put  Put[T]
+	chew Put[T]
+}
+
+func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
+	return func() (*stage[T], error) {
+		opts, err := buildStageOptions(optFns)
+		if err != nil {
+			return nil, err
+		}
+
+		stage := &stage[T]{
+			commonStage: commonStage[T]{
+				opts:        opts,
+				emitToOutCh: true,
+				inCh:        make(chan T, opts.inputBufferSize),
+			},
+			fn: fn,
+		}
+
+		stage.put = func(v T) {
+			if stage.emitToOutCh {
+				stage.outCh <- v
+			}
+		}
+
+		stage.chew = func(v T) {
+			stage.inCh <- v
+		}
+
+		return stage, nil
+	}
+}
+
+func (s *stage[T]) executeOnce() (ok bool, err error) {
+	// TODO: stage can not close itself
+	in, ok := <-s.inCh
+	if !ok {
+		return false, nil
+	}
+	err = s.fn(in, s.put, s.chew)
+	return ok, err
+}
+
+func (s *stage[T]) execute() error {
+	ok, err := s.executeOnce()
+	for ok && err == nil {
+		ok, err = s.executeOnce()
+	}
+
+	return err
+}

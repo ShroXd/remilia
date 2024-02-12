@@ -193,11 +193,15 @@ func TestSinkWrappedFunc(t *testing.T) {
 func TestDo(t *testing.T) {
 	instance, _ := New()
 
-	fn := func(get Get[*Request], put, chew Put[*Request]) error {
+	processorFunc := func(get Get[*Request], put, chew Put[*Request]) error {
 		return nil
 	}
 
-	err := instance.Do(NewProcessor(fn), NewProcessor(fn))
+	stageFunc := func(in *Request, put, chew Put[*Request]) error {
+		return nil
+	}
+
+	err := instance.Do(NewProcessor(processorFunc), NewStage(stageFunc))
 
 	assert.NoError(t, err, "Do should not return an error")
 }

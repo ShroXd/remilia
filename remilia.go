@@ -170,6 +170,60 @@ func (r *Remilia) relayWrappedFunc(fn func(in *goquery.Document, put Put[string]
 	}
 }
 
+func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageFunc[*Request] {
+	return func(in *Request, put Put[*Request], chew Put[*Request]) error {
+		resp, err := r.client.Execute(in)
+		if err != nil {
+			r.logger.Error("Failed to execute request", LogContext{
+				"err": err,
+			})
+			return err
+		}
+
+		wrappedPut := func(in string) {
+			if !r.urlMatcher(in) {
+				r.logger.Error("Failed to match url", LogContext{
+					"url": in,
+				})
+				return
+			}
+
+			req, err := NewRequest(WithURL(in))
+			if err != nil {
+				r.logger.Error("Failed to create request", LogContext{
+					"err": err,
+				})
+				return
+			}
+
+			put(req)
+		}
+
+		wrappedChew := func(in string) {
+			if !r.urlMatcher(in) {
+				r.logger.Error("Failed to match url", LogContext{
+					"url": in,
+				})
+				return
+			}
+
+			req, err := NewRequest(WithURL(in))
+			if err != nil {
+				r.logger.Error("Failed to create request", LogContext{
+					"err": err,
+				})
+				return
+			}
+
+			chew(req)
+		}
+
+		fn(resp.document, wrappedPut, wrappedChew)
+
+		return nil
+	}
+}
+
 func (r *Remilia) sinkWrappedFunc(fn func(in *goquery.Document) error) func(in *Request) (*Request, error) {
 	return func(in *Request) (*Request, error) {
 		resp, err := r.client.Execute(in)
@@ -192,11 +246,15 @@ func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) Processo
 	return NewProcessor[*Request](r.relayWrappedFunc(fn))
 }
 
+func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageDef[*Request] {
+	return NewStage[*Request](r.unitWrappedFunc(fn))
+}
+
 func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
 	return NewFlow[*Request](r.sinkWrappedFunc(fn))
 }
 
-func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...ProcessorDef[*Request]) error {
+func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...StageDef[*Request]) error {
 	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)
 	if err != nil {
 		return err
