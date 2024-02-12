@@ -70,8 +70,9 @@ func BenchmarkPipelineExecution(b *testing.B) {
 					return nil
 				})
 
-				processor := NewStage[int](func(in int, put, chew Put[int]) error {
-					put(in * 2)
+				processor := NewStage[int](func(get BatchGetFunc[int], put, chew Put[int]) error {
+					vals, _ := get()
+					put(vals[0] * 2)
 					return nil
 				}, Concurrency(uint(tc.concurrency)))
 

@@ -200,7 +200,9 @@ func (s *flow[T]) execute() error {
 	return err
 }
 
-type StageFunc[T any] func(in T, put Put[T], chew Put[T]) error
+type BatchGetFunc[T any] func() ([]T, error)
+
+type StageFunc[T any] func(get BatchGetFunc[T], put Put[T], chew Put[T]) error
 type StageDef[T any] func() (*stage[T], error)
 
 type stage[T any] struct {
@@ -241,13 +243,26 @@ func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
 }
 
 func (s *stage[T]) executeOnce() (ok bool, err error) {
-	// TODO: stage can not close itself
-	in, ok := <-s.inCh
-	if !ok {
-		return false, nil
+	var batchOk bool
+
+	batchGet := func() ([]T, error) {
+		length := s.concurrency()
+		batch := make([]T, length)
+
+		for i := uint(0); i < length; i++ {
+			in, ok := <-s.inCh
+			if !ok {
+				batchOk = false
+				return batch[:i], nil
+			}
+			batch[i] = in
+		}
+
+		return batch, nil
 	}
-	err = s.fn(in, s.put, s.chew)
-	return ok, err
+
+	err = s.fn(batchGet, s.put, s.chew)
+	return batchOk, err
 }
 
 func (s *stage[T]) execute() error {

@@ -147,14 +147,14 @@ func (m *MockInternalClient) Do(req *fasthttp.Request, resp *fasthttp.Response) 
 }
 
 type HTTPClient interface {
-	Execute(request *Request) (*Response, error)
+	Execute(request []*Request) (*Response, error)
 }
 
 type MockHTTPClient struct {
 	mock.Mock
 }
 
-func (m *MockHTTPClient) Execute(request *Request) (*Response, error) {
+func (m *MockHTTPClient) Execute(request []*Request) (*Response, error) {
 	args := m.Called(request)
 	return args.Get(0).(*Response), args.Error(1)
 }

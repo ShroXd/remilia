@@ -131,48 +131,53 @@ func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put
 	}
 }
 
-func (r *Remilia) relayWrappedFunc(fn func(in *goquery.Document, put Put[string])) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
-	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
-		for {
-			req, ok := get()
-			if !ok {
-				break
-			}
-			resp, err := r.client.Execute(req)
-			if err != nil {
-				r.logger.Error("Failed to execute request", LogContext{
-					"err": err,
-				})
-			}
+// func (r *Remilia) relayWrappedFunc(fn func(in *goquery.Document, put Put[string])) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+// 	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+// 		for {
+// 			req, ok := get()
+// 			if !ok {
+// 				break
+// 			}
+// 			resp, err := r.client.Execute(req)
+// 			if err != nil {
+// 				r.logger.Error("Failed to execute request", LogContext{
+// 					"err": err,
+// 				})
+// 			}
 
-			wrappedPut := func(in string) {
-				if !r.urlMatcher(in) {
-					r.logger.Error("Failed to match url", LogContext{
-						"url": in,
-					})
-					return
-				}
+// 			wrappedPut := func(in string) {
+// 				if !r.urlMatcher(in) {
+// 					r.logger.Error("Failed to match url", LogContext{
+// 						"url": in,
+// 					})
+// 					return
+// 				}
 
-				req, err := NewRequest(WithURL(in))
-				if err != nil {
-					r.logger.Error("Failed to create request", LogContext{
-						"err": err,
-					})
-					return
-				}
+// 				req, err := NewRequest(WithURL(in))
+// 				if err != nil {
+// 					r.logger.Error("Failed to create request", LogContext{
+// 						"err": err,
+// 					})
+// 					return
+// 				}
 
-				put(req)
-			}
-			fn(resp.document, wrappedPut)
-		}
+// 				put(req)
+// 			}
+// 			fn(resp.document, wrappedPut)
+// 		}
 
-		return nil
-	}
-}
+// 		return nil
+// 	}
+// }
 
 func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageFunc[*Request] {
-	return func(in *Request, put Put[*Request], chew Put[*Request]) error {
-		resp, err := r.client.Execute(in)
+	return func(get BatchGetFunc[*Request], put Put[*Request], chew Put[*Request]) error {
+		reqs, err := get()
+		if err != nil {
+			return err
+		}
+
+		resp, err := r.client.Execute(reqs)
 		if err != nil {
 			r.logger.Error("Failed to execute request", LogContext{
 				"err": err,
@@ -224,35 +229,35 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string],
 	}
 }
 
-func (r *Remilia) sinkWrappedFunc(fn func(in *goquery.Document) error) func(in *Request) (*Request, error) {
-	return func(in *Request) (*Request, error) {
-		resp, err := r.client.Execute(in)
-		if err != nil {
-			r.logger.Error("Failed to execute request", LogContext{
-				"err": err,
-			})
-		}
-		fn(resp.document)
+// func (r *Remilia) sinkWrappedFunc(fn func(in *goquery.Document) error) func(in *Request) (*Request, error) {
+// 	return func(in *Request) (*Request, error) {
+// 		resp, err := r.client.Execute(in)
+// 		if err != nil {
+// 			r.logger.Error("Failed to execute request", LogContext{
+// 				"err": err,
+// 			})
+// 		}
+// 		fn(resp.document)
 
-		return EmptyRequest(), nil
-	}
-}
+// 		return EmptyRequest(), nil
+// 	}
+// }
 
 func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
 	return NewProcessor[*Request](r.justWrappedFunc(urlStr))
 }
 
-func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) ProcessorDef[*Request] {
-	return NewProcessor[*Request](r.relayWrappedFunc(fn))
-}
+// func (r *Remilia) Relay(fn func(in *goquery.Document, put Put[string])) ProcessorDef[*Request] {
+// 	return NewProcessor[*Request](r.relayWrappedFunc(fn))
+// }
 
 func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageDef[*Request] {
 	return NewStage[*Request](r.unitWrappedFunc(fn))
 }
 
-func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
-	return NewFlow[*Request](r.sinkWrappedFunc(fn))
-}
+// func (r *Remilia) Sink(fn func(in *goquery.Document) error) FlowDef[*Request] {
+// 	return NewFlow[*Request](r.sinkWrappedFunc(fn))
+// }
 
 func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...StageDef[*Request]) error {
 	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)

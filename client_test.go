@@ -98,7 +98,7 @@ func assertExecuteSuccess(t *testing.T, client *Client, httpClient *MockInternal
 	}
 
 	request := &Request{}
-	response, err := client.Execute(request)
+	response, err := client.Execute([]*Request{request})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
@@ -112,7 +112,7 @@ func assertExecuteFailure(t *testing.T, client *Client, httpClient *MockInternal
 	}
 
 	request := &Request{}
-	response, err := client.Execute(request)
+	response, err := client.Execute([]*Request{request})
 
 	assert.Nil(t, response)
 	assert.Error(t, err)
@@ -141,7 +141,7 @@ func TestExecute(t *testing.T) {
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(errors.New("test network error"))
 
 		request := &Request{}
-		response, err := client.Execute(request)
+		response, err := client.Execute([]*Request{request})
 
 		assert.Nil(t, response, "Response should be nil")
 		assert.Error(t, err, "NewClient should return error")
@@ -173,7 +173,7 @@ func TestExecute(t *testing.T) {
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
 
 		request := &Request{}
-		response, err := client.Execute(request)
+		response, err := client.Execute([]*Request{request})
 
 		assert.Nil(t, response, "Response should be nil")
 		assert.Error(t, err, "NewClient should return error")

@@ -128,7 +128,9 @@ func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...Clie
 	}, nil
 }
 
-func (c *Client) Execute(request *Request) (*Response, error) {
+func (c *Client) Execute(requestArr []*Request) (*Response, error) {
+	request := requestArr[0]
+
 	c.opts.udPreRequestHooksLock.RLock()
 	defer c.opts.udPreRequestHooksLock.RUnlock()
 
