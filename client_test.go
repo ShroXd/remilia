@@ -2,9 +2,11 @@ package remilia
 
 import (
 	"errors"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/valyala/fasthttp"
@@ -58,6 +60,15 @@ func TestBuildClientOptions(t *testing.T) {
 		assert.Error(t, err, "buildClientOptions should return error")
 		assert.Equal(t, ErrInvalidTimeout, err, "Error should be ErrInvalidTimeout")
 	})
+}
+
+type MockInternalClient struct {
+	mock.Mock
+}
+
+func (m *MockInternalClient) Do(req *fasthttp.Request, resp *fasthttp.Response) error {
+	args := m.Called(req, resp)
+	return args.Error(0)
 }
 
 func TestNewClient(t *testing.T) {
@@ -119,6 +130,15 @@ func assertExecuteFailure(t *testing.T, client *Client, httpClient *MockInternal
 	assert.Equal(t, expectedError, err.Error())
 
 	httpClient.AssertExpectations(t)
+}
+
+type MockDocumentCreator struct {
+	Doc *goquery.Document
+	Err error
+}
+
+func (d MockDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
+	return d.Doc, d.Err
 }
 
 func TestExecute(t *testing.T) {

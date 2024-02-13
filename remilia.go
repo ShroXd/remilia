@@ -2,6 +2,7 @@ package remilia
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -9,6 +10,25 @@ import (
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
 )
+
+type FileSystemOperations interface {
+	MkdirAll(path string, perm os.FileMode) error
+	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
+}
+
+type FileSystem struct{}
+
+func (fs FileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(path, perm)
+}
+
+func (fs FileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
+
+type HTTPClient interface {
+	Execute(request []*Request) (*Response, error)
+}
 
 type Remilia struct {
 	ID   string

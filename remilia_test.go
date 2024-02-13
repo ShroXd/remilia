@@ -83,6 +83,15 @@ func TestJustWrappedFunc(t *testing.T) {
 	assert.Equal(t, urlStr, requests[0].URL, "justFunc should put the correct request")
 }
 
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+func (m *MockHTTPClient) Execute(request []*Request) (*Response, error) {
+	args := m.Called(request)
+	return args.Get(0).(*Response), args.Error(1)
+}
+
 func setupWrappedFuncTest(t *testing.T) (*Remilia, *observer.ObservedLogs) {
 	mockClient := new(MockHTTPClient)
 	mockClient.On("Execute", mock.Anything).Return(&Response{

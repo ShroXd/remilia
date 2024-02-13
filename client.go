@@ -2,10 +2,12 @@ package remilia
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/valyala/fasthttp"
 )
 
@@ -107,6 +109,20 @@ func InternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
 		opts.postResponseHooks = append(opts.postResponseHooks, hooks...)
 		return nil
 	}
+}
+
+type DocumentCreator interface {
+	NewDocumentFromReader(io.Reader) (*goquery.Document, error)
+}
+
+type DefaultDocumentCreator struct{}
+
+func (d DefaultDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
+	return goquery.NewDocumentFromReader(r)
+}
+
+type InternalClient interface {
+	Do(req *fasthttp.Request, resp *fasthttp.Response) error
 }
 
 type Client struct {

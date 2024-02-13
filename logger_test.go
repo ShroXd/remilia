@@ -143,6 +143,20 @@ func TestNewConsoleCore(t *testing.T) {
 	}
 }
 
+type MockFileSystem struct {
+	MkdirAllErr  error
+	OpenFileErr  error
+	OpenFileMock *os.File
+}
+
+func (mfs MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
+	return mfs.MkdirAllErr
+}
+
+func (mfs MockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return mfs.OpenFileMock, mfs.OpenFileErr
+}
+
 func TestNewFileCore(t *testing.T) {
 	tests := []struct {
 		name         string
