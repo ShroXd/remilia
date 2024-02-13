@@ -64,7 +64,6 @@ func work() {
 }
 
 func startCPUProfile() {
-	// f, err := os.Create("out/cpu.pprof")
 	f, err := createFileWithDir("out/cpu.pprof")
 	if err != nil {
 		panic(err)
@@ -77,7 +76,6 @@ func stopCPUProfile() {
 }
 
 func writeMemProfile() {
-	// f, err := os.Create("out/mem.pprof")
 	f, err := createFileWithDir("out/mem.pprof")
 	if err != nil {
 		panic(err)
@@ -87,7 +85,6 @@ func writeMemProfile() {
 }
 
 func writeBlockProfile() {
-	// f, err := os.Create("out/block.pprof")
 	f, err := createFileWithDir("out/block.pprof")
 	if err != nil {
 		// panic(err)
@@ -97,7 +94,6 @@ func writeBlockProfile() {
 }
 
 func writeGoroutineProfile() {
-	// f, err := os.Create("out/goroutine.pprof")
 	f, err := createFileWithDir("out/goroutine.pprof")
 	if err != nil {
 		// panic(err)
@@ -107,7 +103,6 @@ func writeGoroutineProfile() {
 }
 
 func writeThreadcreateProfile() {
-	// f, err := os.Create("out/threadcreate.pprof")
 	f, err := createFileWithDir("out/threadcreate.pprof")
 	if err != nil {
 		// panic(err)
@@ -117,7 +112,6 @@ func writeThreadcreateProfile() {
 }
 
 func writeMutexProfile() {
-	// f, err := os.Create("out/mutex.pprof")
 	f, err := createFileWithDir("out/mutex.pprof")
 	if err != nil {
 		// panic(err)

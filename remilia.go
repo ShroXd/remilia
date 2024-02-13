@@ -69,9 +69,9 @@ func newCurried(opts ...Option) func() (*Remilia, error) {
 		if r.client == nil {
 			internalClient := newFastHTTPClient()
 			client, err := NewClient(
-				internalClient,
-				&DefaultDocumentCreator{},
-				ClientLogger(r.logger),
+				WithInternalClient(internalClient),
+				WithDocumentCreator(&DefaultDocumentCreator{}),
+				WithClientLogger(r.logger),
 			)
 			if err != nil {
 				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
@@ -95,9 +95,9 @@ func WithDefaultClient() Option {
 	return func(r *Remilia) {
 		internalClient := newFastHTTPClient()
 		client, err := NewClient(
-			internalClient,
-			&DefaultDocumentCreator{},
-			ClientLogger(r.logger),
+			WithInternalClient(internalClient),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithClientLogger(r.logger),
 		)
 		if err != nil {
 			log.Printf("Error: Failed to create instance of the struct due to: %v", err)

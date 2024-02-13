@@ -15,51 +15,6 @@ import (
 )
 
 func TestBuildClientOptions(t *testing.T) {
-	t.Run("Successfully run buildClientOptions with valid options", func(t *testing.T) {
-		opts, err := buildClientOptions([]ClientOptionFn{
-			BaseURL("http://example.com"),
-			Headers(map[string]string{
-				"Content-Type": "application/json",
-				"Accept":       "application/xml",
-			}),
-			Timeout(10 * time.Second),
-			ClientLogger(&DefaultLogger{}),
-		})
-
-		assert.NoError(t, err, "buildClientOptions should not return error")
-		assert.Equal(t, "http://example.com", opts.baseURL, "BaseURL should be http://example.com")
-		assert.Equal(t, "application/json", opts.header.Get("Content-Type"), "Content-Type should be application/json")
-		assert.Equal(t, "application/xml", opts.header.Get("Accept"), "Accept should be application/xml")
-		assert.Equal(t, 10*time.Second, opts.timeout, "Timeout should be 10 seconds")
-		assert.Equal(t, &DefaultLogger{}, opts.logger, "Logger should be set correctly")
-	})
-
-	t.Run("Successfully run buildClientOptions with valid hooks", func(t *testing.T) {
-		mockPreRequestHook := func(client *Client, req *Request) error {
-			return nil
-		}
-		mockPostRequestHook := func(client *Client, resp *Response) error {
-			return nil
-		}
-		opts, err := buildClientOptions([]ClientOptionFn{
-			PreRequestHooks(mockPreRequestHook, mockPreRequestHook),
-			PostResponseHooks(mockPostRequestHook, mockPostRequestHook),
-		})
-
-		assert.NoError(t, err, "buildClientOptions should not return error")
-		assert.Len(t, opts.udPreRequestHooks, 2, "PreRequestHooks should have 2 hooks")
-		assert.Len(t, opts.udPostResponseHooks, 2, "PostResponseHooks should have 2 hooks")
-	})
-
-	t.Run("Failed to run buildClientOptions with invalid options", func(t *testing.T) {
-		opts, err := buildClientOptions([]ClientOptionFn{
-			Timeout(-1),
-		})
-
-		assert.Nil(t, opts, "Options should be nil")
-		assert.Error(t, err, "buildClientOptions should return error")
-		assert.Equal(t, ErrInvalidTimeout, err, "Error should be ErrInvalidTimeout")
-	})
 }
 
 type MockInternalClient struct {
@@ -73,22 +28,85 @@ func (m *MockInternalClient) Do(req *fasthttp.Request, resp *fasthttp.Response) 
 
 func TestNewClient(t *testing.T) {
 	t.Run("Successful build", func(t *testing.T) {
-		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{})
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+		)
 
 		assert.NotNil(t, client, "NewClient should not return nil")
 		assert.NoError(t, err, "NewClient should not return error")
+	})
+
+	t.Run("Successfully run buildClientOptions with valid options", func(t *testing.T) {
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithBaseURL("http://example.com"),
+			WithHeaders(map[string]string{
+				"Content-Type": "application/json",
+				"Accept":       "application/xml",
+			}),
+			WithTimeout(10*time.Second),
+			WithClientLogger(&DefaultLogger{}),
+		)
+
+		assert.NoError(t, err, "buildClientOptions should not return error")
+		assert.Equal(t, "http://example.com", client.baseURL, "BaseURL should be http://example.com")
+		assert.Equal(t, "application/json", client.header.Get("Content-Type"), "Content-Type should be application/json")
+		assert.Equal(t, "application/xml", client.header.Get("Accept"), "Accept should be application/xml")
+		assert.Equal(t, 10*time.Second, client.timeout, "Timeout should be 10 seconds")
+		assert.Equal(t, &DefaultLogger{}, client.logger, "Logger should be set correctly")
+	})
+
+	t.Run("Successfully run buildClientOptions with valid hooks", func(t *testing.T) {
+		mockPreRequestHook := func(client *Client, req *Request) error {
+			return nil
+		}
+		mockPostRequestHook := func(client *Client, resp *Response) error {
+			return nil
+		}
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithPreRequestHooks(mockPreRequestHook, mockPreRequestHook),
+			WithPostResponseHooks(mockPostRequestHook, mockPostRequestHook),
+		)
+
+		assert.NoError(t, err, "buildClientOptions should not return error")
+		assert.Len(t, client.udPreRequestHooks, 2, "PreRequestHooks should have 2 hooks")
+		assert.Len(t, client.udPostResponseHooks, 2, "PostResponseHooks should have 2 hooks")
+	})
+
+	t.Run("Failed to run buildClientOptions with invalid options", func(t *testing.T) {
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithTimeout(-1),
+		)
+
+		assert.Nil(t, client, "Options should be nil")
+		assert.Error(t, err, "buildClientOptions should return error")
+		assert.Equal(t, ErrInvalidTimeout, err, "Error should be ErrInvalidTimeout")
 	})
 
 	t.Run("Successful build with valid options", func(t *testing.T) {
-		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{}, Timeout(10*time.Second))
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithTimeout(10*time.Second),
+		)
 
 		assert.NotNil(t, client, "NewClient should not return nil")
 		assert.NoError(t, err, "NewClient should not return error")
-		assert.Equal(t, 10*time.Second, client.opts.timeout, "Timeout should be 10 seconds")
+		assert.Equal(t, 10*time.Second, client.timeout, "Timeout should be 10 seconds")
 	})
 
 	t.Run("Failed to run NewClient with invalid options", func(t *testing.T) {
-		client, err := NewClient(new(MockInternalClient), &DefaultDocumentCreator{}, Timeout(-1))
+		client, err := NewClient(
+			WithInternalClient(new(MockInternalClient)),
+			WithDocumentCreator(&DefaultDocumentCreator{}),
+			WithTimeout(-1),
+		)
 
 		assert.Nil(t, client, "Client should be nil")
 		assert.Error(t, err, "NewClient should return error")
@@ -96,9 +114,10 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func setupClient(t *testing.T, hooks ...ClientOptionFn) (*Client, *MockInternalClient) {
+func setupClient(t *testing.T, hooks ...ClientOptionFunc) (*Client, *MockInternalClient) {
 	httpClient := new(MockInternalClient)
-	client, err := NewClient(httpClient, &DefaultDocumentCreator{}, hooks...)
+	opts := append(hooks, WithInternalClient(httpClient), WithDocumentCreator(&DefaultDocumentCreator{}))
+	client, err := NewClient(opts...)
 	assert.NoError(t, err)
 	return client, httpClient
 }
@@ -157,7 +176,16 @@ func TestExecute(t *testing.T) {
 		zapLogger := zap.New(core)
 		logger := &DefaultLogger{internal: zapLogger}
 
-		client, httpClient := setupClient(t, ClientLogger(logger))
+		client, httpClient := setupClient(
+			t,
+			WithClientLogger(logger),
+			WithBackoffPool(NewPool[*ExponentialBackoff](
+				NewExponentialBackoffFactory(
+					WithMinDelay(1*time.Nanosecond),
+					WithMaxDelay(10*time.Nanosecond),
+					WithMultiplier(2.0),
+					WithMaxAttempt(1),
+				))))
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(errors.New("test network error"))
 
 		request := &Request{}
@@ -187,7 +215,11 @@ func TestExecute(t *testing.T) {
 			Doc: nil,
 			Err: errors.New("test document error"),
 		}
-		client, err := NewClient(httpClient, docCreator, ClientLogger(logger))
+		client, err := NewClient(
+			WithInternalClient(httpClient),
+			WithDocumentCreator(docCreator),
+			WithClientLogger(logger),
+		)
 		assert.NoError(t, err)
 
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
@@ -209,7 +241,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, PreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -222,14 +254,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, PreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, PostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
@@ -241,7 +273,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, PostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *MockInternalClient) {
@@ -250,7 +282,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with internal pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, InternalPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithInternalPreRequestHooks(func(client *Client, req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -263,14 +295,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, InternalPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithInternalPreRequestHooks(func(client *Client, req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with internal post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, InternalPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithInternalPostResponseHooks(func(client *Client, resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *MockInternalClient) {
@@ -282,7 +314,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, InternalPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithInternalPostResponseHooks(func(client *Client, resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *MockInternalClient) {

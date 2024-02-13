@@ -1,3 +1,3 @@
 package remilia
 
-type OptionFn[T any] func(ins T) error
+type OptionFunc[T any] func(ins T) error

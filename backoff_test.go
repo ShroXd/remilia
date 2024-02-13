@@ -22,12 +22,12 @@ func TestNewExponentialBackoff(t *testing.T) {
 
 	t.Run("Successfully build with valid options", func(t *testing.T) {
 		eb := NewExponentialBackoff(
-			MinDelay(10*time.Millisecond),
-			MaxDelay(1*time.Second),
-			Multiplier(3.0),
-			RandomImp(&defaultRandom{}),
-			MaxAttempt(3),
-			LinearAttempt(2),
+			WithMinDelay(10*time.Millisecond),
+			WithMaxDelay(1*time.Second),
+			WithMultiplier(3.0),
+			WithRandomImp(&defaultRandom{}),
+			WithMaxAttempt(3),
+			WithLinearAttempt(2),
 		)
 
 		assert.Equal(t, 10*time.Millisecond, eb.minDelay, "minDelay should be equal to 10*time.Millisecond")

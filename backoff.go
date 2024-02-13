@@ -45,7 +45,7 @@ var (
 	DefaultRandom        = &defaultRandom{}
 )
 
-func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFn) *ExponentialBackoff {
+func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFunc) *ExponentialBackoff {
 	eb := &ExponentialBackoff{
 		minDelay:      DefaultMinDelay,
 		maxDelay:      DefaultMaxDelay,
@@ -56,6 +56,7 @@ func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFn) *ExponentialBac
 		random:        DefaultRandom,
 	}
 
+	// TODO: return the error from option func
 	for _, optFn := range optFns {
 		optFn(eb)
 	}
@@ -66,41 +67,47 @@ func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFn) *ExponentialBac
 	return eb
 }
 
-type ExponentialBackoffOptionFn func(*ExponentialBackoff)
+type ExponentialBackoffOptionFunc OptionFunc[*ExponentialBackoff]
 
-func MinDelay(d time.Duration) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithMinDelay(d time.Duration) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.minDelay = d
+		return nil
 	}
 }
 
-func MaxDelay(d time.Duration) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithMaxDelay(d time.Duration) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.maxDelay = d
+		return nil
 	}
 }
 
-func Multiplier(m float64) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithMultiplier(m float64) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.multiplier = m
+		return nil
 	}
 }
 
-func RandomImp(r Random) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithRandomImp(r Random) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.random = r
+		return nil
 	}
 }
 
-func MaxAttempt(a uint8) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithMaxAttempt(a uint8) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.maxAttempt = a
+		return nil
 	}
 }
 
-func LinearAttempt(a uint8) ExponentialBackoffOptionFn {
-	return func(eb *ExponentialBackoff) {
+func WithLinearAttempt(a uint8) ExponentialBackoffOptionFunc {
+	return func(eb *ExponentialBackoff) error {
 		eb.linearAttempt = a
+		return nil
 	}
 }
 
@@ -144,10 +151,10 @@ func FullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplie
 }
 
 type ExponentialBackoffFactory struct {
-	opts []ExponentialBackoffOptionFn
+	opts []ExponentialBackoffOptionFunc
 }
 
-func NewExponentialBackoffFactory(opts ...ExponentialBackoffOptionFn) *ExponentialBackoffFactory {
+func NewExponentialBackoffFactory(opts ...ExponentialBackoffOptionFunc) *ExponentialBackoffFactory {
 	return &ExponentialBackoffFactory{
 		opts: opts,
 	}

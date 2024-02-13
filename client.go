@@ -12,106 +12,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type (
-	RequestHook  func(*Client, *Request) error
-	ResponseHook func(*Client, *Response) error
-)
-
-// TODO: is this a good preactice to mixin otps for network request and custom functionality?
-type clientOptions struct {
-	baseURL                 string
-	header                  http.Header
-	timeout                 time.Duration
-	logger                  Logger
-	preRequestHooks         []RequestHook
-	udPreRequestHooks       []RequestHook
-	udPreRequestHooksLock   sync.RWMutex
-	postResponseHooks       []ResponseHook
-	udPostResponseHooks     []ResponseHook
-	udPostResponseHooksLock sync.RWMutex
-}
-
-type ClientOptionFn OptionFn[*clientOptions]
-
-func buildClientOptions(optFns []ClientOptionFn) (*clientOptions, error) {
-	opts := &clientOptions{
-		header: http.Header{},
-	}
-	for _, optFn := range optFns {
-		if err := optFn(opts); err != nil {
-			return nil, err
-		}
-	}
-	return opts, nil
-}
-
-func BaseURL(url string) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.baseURL = url
-		return nil
-	}
-}
-
-func Headers(headers map[string]string) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		for h, v := range headers {
-			opts.header.Set(h, v)
-		}
-		return nil
-	}
-}
-
-func Timeout(timeout time.Duration) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		if timeout < 0 {
-			return ErrInvalidTimeout
-		}
-		opts.timeout = timeout
-		return nil
-	}
-}
-
-func ClientLogger(logger Logger) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.logger = logger
-		return nil
-	}
-}
-
-func PreRequestHooks(hooks ...RequestHook) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.udPreRequestHooksLock.Lock()
-		defer opts.udPreRequestHooksLock.Unlock()
-
-		opts.udPreRequestHooks = append(opts.udPreRequestHooks, hooks...)
-		return nil
-	}
-}
-
-func PostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.udPostResponseHooksLock.Lock()
-		defer opts.udPostResponseHooksLock.Unlock()
-
-		opts.udPostResponseHooks = append(opts.udPostResponseHooks, hooks...)
-		return nil
-	}
-}
-
-func InternalPreRequestHooks(hooks ...RequestHook) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.preRequestHooks = append(opts.preRequestHooks, hooks...)
-		return nil
-	}
-}
-
-func InternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
-	return func(opts *clientOptions) error {
-		opts.postResponseHooks = append(opts.postResponseHooks, hooks...)
-		return nil
-	}
-}
-
 type DocumentCreator interface {
 	NewDocumentFromReader(io.Reader) (*goquery.Document, error)
 }
@@ -136,49 +36,163 @@ func (f ReaderFactory) Reset(r *bytes.Reader) {
 	r.Reset(nil)
 }
 
+type (
+	RequestHook  func(*Client, *Request) error
+	ResponseHook func(*Client, *Response) error
+)
+
+// TODO: is this a good preactice to mixin otps for network request and custom functionality?
+type ClientOptionFunc OptionFunc[*Client]
+
 type Client struct {
-	opts        *clientOptions
+	baseURL                 string
+	header                  http.Header
+	timeout                 time.Duration
+	logger                  Logger
+	preRequestHooks         []RequestHook
+	udPreRequestHooks       []RequestHook
+	udPreRequestHooksLock   sync.RWMutex
+	postResponseHooks       []ResponseHook
+	udPostResponseHooks     []ResponseHook
+	udPostResponseHooksLock sync.RWMutex
+
 	internal    InternalClient
 	docCreator  DocumentCreator
 	backoffPool *Pool[*ExponentialBackoff]
 	readerPool  *Pool[*bytes.Reader]
 }
 
-func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...ClientOptionFn) (*Client, error) {
-	opts, err := buildClientOptions(optFns)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Client{
-		opts:       opts,
-		internal:   client,
-		docCreator: docCreator,
+func NewClient(opts ...ClientOptionFunc) (*Client, error) {
+	c := &Client{
 		backoffPool: NewPool[*ExponentialBackoff](NewExponentialBackoffFactory(
-			MinDelay(1*time.Second),
-			MaxDelay(10*time.Second),
-			Multiplier(2.0),
+			WithMinDelay(1*time.Second),
+			WithMaxDelay(10*time.Second),
+			WithMultiplier(2.0),
 		)),
 		readerPool: NewPool[*bytes.Reader](ReaderFactory{}),
-	}, nil
+	}
+
+	c.header = http.Header{}
+	for _, optFn := range opts {
+		if err := optFn(c); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
+}
+
+func WithBaseURL(url string) ClientOptionFunc {
+	return func(c *Client) error {
+		c.baseURL = url
+		return nil
+	}
+}
+
+func WithHeaders(headers map[string]string) ClientOptionFunc {
+	return func(c *Client) error {
+		for h, v := range headers {
+			c.header.Set(h, v)
+		}
+		return nil
+	}
+}
+
+func WithTimeout(timeout time.Duration) ClientOptionFunc {
+	return func(c *Client) error {
+		if timeout < 0 {
+			return ErrInvalidTimeout
+		}
+		c.timeout = timeout
+		return nil
+	}
+}
+
+func WithClientLogger(logger Logger) ClientOptionFunc {
+	return func(c *Client) error {
+		c.logger = logger
+		return nil
+	}
+}
+
+func WithPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
+	return func(c *Client) error {
+		c.udPreRequestHooksLock.Lock()
+		defer c.udPreRequestHooksLock.Unlock()
+
+		c.udPreRequestHooks = append(c.udPreRequestHooks, hooks...)
+		return nil
+	}
+}
+
+func WithPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
+	return func(c *Client) error {
+		c.udPostResponseHooksLock.Lock()
+		defer c.udPostResponseHooksLock.Unlock()
+
+		c.udPostResponseHooks = append(c.udPostResponseHooks, hooks...)
+		return nil
+	}
+}
+
+func WithInternalPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, hooks...)
+		return nil
+	}
+}
+
+func WithInternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
+	return func(c *Client) error {
+		c.postResponseHooks = append(c.postResponseHooks, hooks...)
+		return nil
+	}
+}
+
+func WithInternalClient(client InternalClient) ClientOptionFunc {
+	return func(c *Client) error {
+		c.internal = client
+		return nil
+	}
+}
+
+func WithDocumentCreator(creator DocumentCreator) ClientOptionFunc {
+	return func(c *Client) error {
+		c.docCreator = creator
+		return nil
+	}
+}
+
+func WithBackoffPool(backoffPool *Pool[*ExponentialBackoff]) ClientOptionFunc {
+	return func(c *Client) error {
+		c.backoffPool = backoffPool
+		return nil
+	}
+}
+
+func WithReaderPool(readerPool *Pool[*bytes.Reader]) ClientOptionFunc {
+	return func(c *Client) error {
+		c.readerPool = readerPool
+		return nil
+	}
 }
 
 func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 	request := requestArr[0]
 
-	c.opts.udPreRequestHooksLock.RLock()
-	defer c.opts.udPreRequestHooksLock.RUnlock()
+	c.udPreRequestHooksLock.RLock()
+	defer c.udPreRequestHooksLock.RUnlock()
 
-	c.opts.udPostResponseHooksLock.RLock()
-	defer c.opts.udPostResponseHooksLock.RUnlock()
+	c.udPostResponseHooksLock.RLock()
+	defer c.udPostResponseHooksLock.RUnlock()
 
-	for _, fn := range c.opts.preRequestHooks {
+	for _, fn := range c.preRequestHooks {
 		if err := fn(c, request); err != nil {
 			return nil, err
 		}
 	}
 
-	for _, fn := range c.opts.udPreRequestHooks {
+	for _, fn := range c.udPreRequestHooks {
 		if err := fn(c, request); err != nil {
 			return nil, err
 		}
@@ -197,7 +211,7 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 	c.backoffPool.Put(backoff)
 
 	if err != nil {
-		c.opts.logger.Error("Failed to execute request", LogContext{
+		c.logger.Error("Failed to execute request", LogContext{
 			"err": err,
 		})
 		return nil, err
@@ -212,7 +226,7 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 	doc, err := c.docCreator.NewDocumentFromReader(reader)
 	c.readerPool.Put(reader)
 	if err != nil {
-		c.opts.logger.Error("Failed to build goquery document", LogContext{
+		c.logger.Error("Failed to build goquery document", LogContext{
 			"err": err,
 		})
 		return nil, err
@@ -222,13 +236,13 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 		document: doc,
 	}
 
-	for _, fn := range c.opts.postResponseHooks {
+	for _, fn := range c.postResponseHooks {
 		if err := fn(c, response); err != nil {
 			return nil, err
 		}
 	}
 
-	for _, fn := range c.opts.udPostResponseHooks {
+	for _, fn := range c.udPostResponseHooks {
 		if err := fn(c, response); err != nil {
 			return nil, err
 		}
