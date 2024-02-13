@@ -161,27 +161,26 @@ func (f *ExponentialBackoffFactory) Reset(eb *ExponentialBackoff) {
 	eb.Reset()
 }
 
-type RetryableFunc[T any] func() (T, error)
+type RetryableFunc func() error
 
-func Retry[T any](ctx context.Context, op RetryableFunc[T], eb Backoff) (T, error) {
+func Retry(ctx context.Context, op RetryableFunc, eb Backoff) error {
 	var lastErr error
-	var result T
 	maxAttempts := eb.GetMaxAttempt()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return result, ctx.Err()
+			return ctx.Err()
 		default:
-			result, lastErr = op()
+			lastErr = op()
 			if lastErr == nil {
-				return result, nil
+				return nil
 			}
 
 			delay := eb.Next()
 			select {
 			case <-ctx.Done():
-				return result, ctx.Err()
+				return ctx.Err()
 			case <-time.After(delay):
 			}
 		}
@@ -191,5 +190,5 @@ func Retry[T any](ctx context.Context, op RetryableFunc[T], eb Backoff) (T, erro
 		}
 	}
 
-	return result, lastErr
+	return lastErr
 }

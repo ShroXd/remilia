@@ -144,18 +144,16 @@ func (m *MockExponentialBackoff) GetCurrentAttempt() uint8 {
 func TestRetry(t *testing.T) {
 	t.Run("Successfully run without retry", func(t *testing.T) {
 		ctx := context.Background()
-		expectedResult := "success"
-		operation := func() (string, error) {
-			return expectedResult, nil
+		operation := func() error {
+			return nil
 		}
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 
-		result, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.NoError(t, err, "err should be nil")
-		assert.Equal(t, expectedResult, result, "result should be equal to expectedResult")
 		assert.Equal(t, uint8(0), eb.GetCurrentAttempt(), "attempt should be equal to 0")
 	})
 
@@ -163,56 +161,53 @@ func TestRetry(t *testing.T) {
 		ctx := context.Background()
 		failures := 2
 		attempts := 0
-		expectedResult := "success"
-		operation := func() (string, error) {
+		operation := func() error {
 			attempts++
 			if attempts <= failures {
-				return "", assert.AnError
+				return assert.AnError
 			}
 
-			return expectedResult, nil
+			return nil
 		}
 
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 
-		result, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.NoError(t, err, "err should be nil")
-		assert.Equal(t, expectedResult, result, "result should be equal to expectedResult")
 		assert.Equal(t, uint8(failures), eb.GetCurrentAttempt(), "attempt should be equal to failures")
 	})
 
 	t.Run("Failure after all attempts", func(t *testing.T) {
 		ctx := context.Background()
 		failures := 3
-		operation := func() (string, error) {
-			return "", errors.New("permanent error")
+		operation := func() error {
+			return errors.New("permanent error")
 		}
 
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 
-		result, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.Error(t, err, "err should not be nil")
-		assert.Empty(t, result, "result should be empty")
 		assert.Equal(t, uint8(failures), eb.GetCurrentAttempt(), "attempt should be equal to failures")
 	})
 
 	t.Run("Failure with cancelled context", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		operation := func() (string, error) {
-			return "", errors.New("won't execute")
+		operation := func() error {
+			return errors.New("won't execute")
 		}
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 		cancel()
 
-		_, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.Error(t, err, "err should not be nil")
 		assert.Equal(t, context.Canceled, err, "err should be equal to context.Canceled")
@@ -220,15 +215,15 @@ func TestRetry(t *testing.T) {
 
 	t.Run("Failure with deadline exceeded context", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
-		operation := func() (string, error) {
-			return "", errors.New("won't execute")
+		operation := func() error {
+			return errors.New("won't execute")
 		}
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 		defer cancel()
 
-		_, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.Error(t, err, "err should not be nil")
 		assert.Equal(t, context.DeadlineExceeded, err, "err should be equal to context.DeadlineExceeded")
@@ -236,15 +231,15 @@ func TestRetry(t *testing.T) {
 
 	t.Run("Failure with cancelled context after some retries", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		operation := func() (string, error) {
+		operation := func() error {
 			cancel()
-			return "", errors.New("won't execute")
+			return errors.New("won't execute")
 		}
 		eb := &MockExponentialBackoff{
 			MaxAttempt: 3,
 		}
 
-		_, err := Retry(ctx, operation, eb)
+		err := Retry(ctx, operation, eb)
 
 		assert.Error(t, err, "err should not be nil")
 		assert.Equal(t, context.Canceled, err, "err should be equal to context.Canceled")
