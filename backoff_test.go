@@ -1,6 +1,8 @@
 package remilia
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -14,7 +16,7 @@ func TestNewExponentialBackoff(t *testing.T) {
 		assert.Equal(t, DefaultMinDelay, eb.minDelay, "minDelay should be equal to DefaultMinDelay")
 		assert.Equal(t, DefaultMaxDelay, eb.maxDelay, "maxDelay should be equal to DefaultMaxDelay")
 		assert.Equal(t, DefaultMultiplier, eb.multiplier, "multiplier should be equal to DefaultMultiplier")
-		assert.Equal(t, int32(0), eb.attempt, "attempt should be equal to 0")
+		assert.Equal(t, uint8(0), eb.attempt, "attempt should be equal to 0")
 		assert.Equal(t, DefaultRandom, eb.random, "random should be equal to DefaultRandom")
 	})
 
@@ -24,13 +26,17 @@ func TestNewExponentialBackoff(t *testing.T) {
 			MaxDelay(1*time.Second),
 			Multiplier(3.0),
 			RandomImp(&defaultRandom{}),
+			MaxAttempt(3),
+			LinearAttempt(2),
 		)
 
 		assert.Equal(t, 10*time.Millisecond, eb.minDelay, "minDelay should be equal to 10*time.Millisecond")
 		assert.Equal(t, 1*time.Second, eb.maxDelay, "maxDelay should be equal to 1*time.Second")
 		assert.Equal(t, 3.0, eb.multiplier, "multiplier should be equal to 3.0")
-		assert.Equal(t, int32(0), eb.attempt, "attempt should be equal to 0")
+		assert.Equal(t, uint8(0), eb.attempt, "attempt should be equal to 0")
 		assert.Equal(t, DefaultRandom, eb.random, "random should be equal to DefaultRandom")
+		assert.Equal(t, uint8(3), eb.maxAttempt, "maxAttempt should be equal to 3")
+		assert.Equal(t, uint8(2), eb.linearAttempt, "linearAttempt should be equal to 2")
 	})
 }
 
@@ -41,7 +47,7 @@ func TestExponentialBackoff(t *testing.T) {
 		eb.attempt = 10
 		eb.Reset()
 
-		assert.Equal(t, int32(0), eb.attempt, "attempt should be equal to 0")
+		assert.Equal(t, uint8(0), eb.attempt, "attempt should be equal to 0")
 	})
 
 	t.Run("Successfully next", func(t *testing.T) {
@@ -49,7 +55,17 @@ func TestExponentialBackoff(t *testing.T) {
 
 		backoff := eb.Next()
 		assert.Equal(t, DefaultMinDelay, backoff, "backoff should be equal to DefaultMinDelay")
-		assert.Equal(t, int32(1), eb.attempt, "attempt should be equal to 1")
+		assert.Equal(t, uint8(1), eb.attempt, "attempt should be equal to 1")
+	})
+
+	t.Run("GetMaxAttempt", func(t *testing.T) {
+		eb := NewExponentialBackoff()
+		assert.Equal(t, DefaultMaxAttempt, eb.GetMaxAttempt(), "maxAttempt should be equal to DefaultMaxAttempt")
+	})
+
+	t.Run("GetCurrentAttempt", func(t *testing.T) {
+		eb := NewExponentialBackoff()
+		assert.Equal(t, uint8(0), eb.GetCurrentAttempt(), "attempt should be equal to 0")
 	})
 }
 
@@ -59,7 +75,7 @@ func TestReset(t *testing.T) {
 	eb.attempt = 10
 	eb.Reset()
 
-	assert.Equal(t, int32(0), eb.attempt, "attempt should be equal to 0")
+	assert.Equal(t, uint8(0), eb.attempt, "attempt should be equal to 0")
 }
 
 type MockRandom struct {
@@ -88,7 +104,7 @@ func TestFullJitterBuilder(t *testing.T) {
 	backoffFunc := FullJitterBuilder(minDelay, capacity, multiplier, random)
 
 	testCases := []struct {
-		attempt  int32
+		attempt  uint8
 		expected time.Duration
 	}{
 		{0, 1 * time.Second},
@@ -101,4 +117,136 @@ func TestFullJitterBuilder(t *testing.T) {
 		backoff := backoffFunc(tc.attempt)
 		assert.InEpsilon(t, tc.expected, backoff, float64(time.Millisecond), "backoff should be equal to expected")
 	}
+}
+
+type MockExponentialBackoff struct {
+	Attempt    uint8
+	MaxAttempt uint8
+}
+
+func (m *MockExponentialBackoff) Reset() {
+	m.Attempt = 0
+}
+
+func (m *MockExponentialBackoff) Next() time.Duration {
+	m.Attempt++
+	return 1 * time.Millisecond
+}
+
+func (m *MockExponentialBackoff) GetMaxAttempt() uint8 {
+	return m.MaxAttempt
+}
+
+func (m *MockExponentialBackoff) GetCurrentAttempt() uint8 {
+	return m.Attempt
+}
+
+func TestRetry(t *testing.T) {
+	t.Run("Successfully run without retry", func(t *testing.T) {
+		ctx := context.Background()
+		expectedResult := "success"
+		operation := func() (string, error) {
+			return expectedResult, nil
+		}
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+
+		result, err := Retry(ctx, operation, eb)
+
+		assert.NoError(t, err, "err should be nil")
+		assert.Equal(t, expectedResult, result, "result should be equal to expectedResult")
+		assert.Equal(t, uint8(0), eb.GetCurrentAttempt(), "attempt should be equal to 0")
+	})
+
+	t.Run("Successfully run after retries", func(t *testing.T) {
+		ctx := context.Background()
+		failures := 2
+		attempts := 0
+		expectedResult := "success"
+		operation := func() (string, error) {
+			attempts++
+			if attempts <= failures {
+				return "", assert.AnError
+			}
+
+			return expectedResult, nil
+		}
+
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+
+		result, err := Retry(ctx, operation, eb)
+
+		assert.NoError(t, err, "err should be nil")
+		assert.Equal(t, expectedResult, result, "result should be equal to expectedResult")
+		assert.Equal(t, uint8(failures), eb.GetCurrentAttempt(), "attempt should be equal to failures")
+	})
+
+	t.Run("Failure after all attempts", func(t *testing.T) {
+		ctx := context.Background()
+		failures := 3
+		operation := func() (string, error) {
+			return "", errors.New("permanent error")
+		}
+
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+
+		result, err := Retry(ctx, operation, eb)
+
+		assert.Error(t, err, "err should not be nil")
+		assert.Empty(t, result, "result should be empty")
+		assert.Equal(t, uint8(failures), eb.GetCurrentAttempt(), "attempt should be equal to failures")
+	})
+
+	t.Run("Failure with cancelled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		operation := func() (string, error) {
+			return "", errors.New("won't execute")
+		}
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+		cancel()
+
+		_, err := Retry(ctx, operation, eb)
+
+		assert.Error(t, err, "err should not be nil")
+		assert.Equal(t, context.Canceled, err, "err should be equal to context.Canceled")
+	})
+
+	t.Run("Failure with deadline exceeded context", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		operation := func() (string, error) {
+			return "", errors.New("won't execute")
+		}
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+		defer cancel()
+
+		_, err := Retry(ctx, operation, eb)
+
+		assert.Error(t, err, "err should not be nil")
+		assert.Equal(t, context.DeadlineExceeded, err, "err should be equal to context.DeadlineExceeded")
+	})
+
+	t.Run("Failure with cancelled context after some retries", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		operation := func() (string, error) {
+			cancel()
+			return "", errors.New("won't execute")
+		}
+		eb := &MockExponentialBackoff{
+			MaxAttempt: 3,
+		}
+
+		_, err := Retry(ctx, operation, eb)
+
+		assert.Error(t, err, "err should not be nil")
+		assert.Equal(t, context.Canceled, err, "err should be equal to context.Canceled")
+	})
 }

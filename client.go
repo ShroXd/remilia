@@ -110,9 +110,10 @@ func InternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFn {
 }
 
 type Client struct {
-	opts       *clientOptions
-	internal   InternalClient
-	docCreator DocumentCreator
+	opts        *clientOptions
+	internal    InternalClient
+	docCreator  DocumentCreator
+	backoffPool *Pool[*ExponentialBackoff]
 }
 
 func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...ClientOptionFn) (*Client, error) {
@@ -125,6 +126,11 @@ func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...Clie
 		opts:       opts,
 		internal:   client,
 		docCreator: docCreator,
+		backoffPool: NewPool[*ExponentialBackoff](NewExponentialBackoffFactory(
+			MinDelay(1*time.Second),
+			MaxDelay(10*time.Second),
+			Multiplier(2.0),
+		)),
 	}, nil
 }
 
@@ -153,8 +159,11 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
+	backoff := c.backoffPool.Get()
 
 	err := c.internal.Do(req, resp)
+
+	c.backoffPool.Put(backoff)
 	if err != nil {
 		c.opts.logger.Error("Failed to execute request", LogContext{
 			"err": err,
