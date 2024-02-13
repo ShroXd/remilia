@@ -2,6 +2,7 @@ package remilia
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"sync"
@@ -125,11 +126,22 @@ type InternalClient interface {
 	Do(req *fasthttp.Request, resp *fasthttp.Response) error
 }
 
+type ReaderFactory struct{}
+
+func (f ReaderFactory) New() *bytes.Reader {
+	return new(bytes.Reader)
+}
+
+func (f ReaderFactory) Reset(r *bytes.Reader) {
+	r.Reset(nil)
+}
+
 type Client struct {
 	opts        *clientOptions
 	internal    InternalClient
 	docCreator  DocumentCreator
 	backoffPool *Pool[*ExponentialBackoff]
+	readerPool  *Pool[*bytes.Reader]
 }
 
 func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...ClientOptionFn) (*Client, error) {
@@ -147,6 +159,7 @@ func NewClient(client InternalClient, docCreator DocumentCreator, optFns ...Clie
 			MaxDelay(10*time.Second),
 			Multiplier(2.0),
 		)),
+		readerPool: NewPool[*bytes.Reader](ReaderFactory{}),
 	}, nil
 }
 
@@ -175,11 +188,14 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
+
 	backoff := c.backoffPool.Get()
-
-	err := c.internal.Do(req, resp)
-
+	op := func() error {
+		return c.internal.Do(req, resp)
+	}
+	err := Retry(context.TODO(), op, backoff)
 	c.backoffPool.Put(backoff)
+
 	if err != nil {
 		c.opts.logger.Error("Failed to execute request", LogContext{
 			"err": err,
@@ -191,7 +207,10 @@ func (c *Client) Execute(requestArr []*Request) (*Response, error) {
 		fasthttp.ReleaseRequest(req)
 	}()
 
-	doc, err := c.docCreator.NewDocumentFromReader(bytes.NewReader(resp.Body()))
+	reader := c.readerPool.Get()
+	reader.Reset(resp.Body())
+	doc, err := c.docCreator.NewDocumentFromReader(reader)
+	c.readerPool.Put(reader)
 	if err != nil {
 		c.opts.logger.Error("Failed to build goquery document", LogContext{
 			"err": err,
