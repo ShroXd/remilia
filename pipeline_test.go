@@ -51,7 +51,7 @@ func TestPipelineExecute(t *testing.T) {
 			return nil
 		})
 
-		processor := NewStage[int](func(get Get[int], put, chew Put[int]) error {
+		processor := NewStage[int](func(get Get[int], put, chew Put[int], inCh chan int) error {
 			arr, _ := get()
 			put(arr * 2)
 			// TODO: chew has bug with closed channel
@@ -71,7 +71,7 @@ func TestPipelineExecute(t *testing.T) {
 			return nil
 		})
 
-		errProcessor := NewStage[int](func(get Get[int], put, chew Put[int]) error {
+		errProcessor := NewStage[int](func(get Get[int], put, chew Put[int], inCh chan int) error {
 			return errors.New("test error")
 		})
 
