@@ -16,6 +16,7 @@ $(OUTPUT_DIR) $(BENCHMARK_DIR):
 	@mkdir -p $@
 
 release:
+	@git push
 	@git tag -a v$(version) -m "Release version $(version)"
 	@git push origin v$(version)
 
