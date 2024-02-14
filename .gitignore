@@ -26,4 +26,6 @@ logs/
 # Out
 out/
 
+fiction/
+
 .idea/
