@@ -87,7 +87,7 @@ type MockHTTPClient struct {
 	mock.Mock
 }
 
-func (m *MockHTTPClient) Execute(request []*Request) (*Response, error) {
+func (m *MockHTTPClient) Execute(request *Request) (*Response, error) {
 	args := m.Called(request)
 	return args.Get(0).(*Response), args.Error(1)
 }
@@ -206,7 +206,7 @@ func TestDo(t *testing.T) {
 		return nil
 	}
 
-	stageFunc := func(get BatchGetFunc[*Request], put, chew Put[*Request]) error {
+	stageFunc := func(get Get[*Request], put, chew Put[*Request]) error {
 		return nil
 	}
 

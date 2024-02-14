@@ -27,7 +27,7 @@ func (fs FileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File
 }
 
 type HTTPClient interface {
-	Execute(request []*Request) (*Response, error)
+	Execute(request *Request) (*Response, error)
 }
 
 type Remilia struct {
@@ -191,13 +191,13 @@ func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put
 // }
 
 func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageFunc[*Request] {
-	return func(get BatchGetFunc[*Request], put Put[*Request], chew Put[*Request]) error {
-		reqs, err := get()
-		if err != nil {
-			return err
+	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
+		req, ok := get()
+		if !ok {
+			return nil
 		}
 
-		resp, err := r.client.Execute(reqs)
+		resp, err := r.client.Execute(req)
 		if err != nil {
 			r.logger.Error("Failed to execute request", LogContext{
 				"err": err,

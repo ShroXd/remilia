@@ -177,9 +177,7 @@ func WithReaderPool(readerPool *Pool[*bytes.Reader]) ClientOptionFunc {
 	}
 }
 
-func (c *Client) Execute(requestArr []*Request) (*Response, error) {
-	request := requestArr[0]
-
+func (c *Client) Execute(request *Request) (*Response, error) {
 	c.udPreRequestHooksLock.RLock()
 	defer c.udPreRequestHooksLock.RUnlock()
 

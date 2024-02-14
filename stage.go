@@ -202,14 +202,15 @@ func (s *flow[T]) execute() error {
 
 type BatchGetFunc[T any] func() ([]T, error)
 
-type StageFunc[T any] func(get BatchGetFunc[T], put Put[T], chew Put[T]) error
+type StageFunc[T any] func(get Get[T], put Put[T], chew Put[T]) error
 type StageDef[T any] func() (*stage[T], error)
 
 type stage[T any] struct {
 	commonStage[T]
-	fn   StageFunc[T]
-	put  Put[T]
-	chew Put[T]
+	fn     StageFunc[T]
+	put    Put[T]
+	chew   Put[T]
+	getter func() (T, bool)
 }
 
 func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
@@ -238,6 +239,13 @@ func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
 			stage.inCh <- v
 		}
 
+		stage.getter = func() (out T, ok bool) {
+			select {
+			case out, ok = <-stage.inCh:
+				return out, ok
+			}
+		}
+
 		return stage, nil
 	}
 }
@@ -245,23 +253,23 @@ func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
 func (s *stage[T]) executeOnce() (ok bool, err error) {
 	var batchOk bool
 
-	batchGet := func() ([]T, error) {
-		length := s.concurrency()
-		batch := make([]T, length)
+	// batchGet := func() ([]T, error) {
+	// 	length := s.concurrency()
+	// 	batch := make([]T, length)
 
-		for i := uint(0); i < length; i++ {
-			in, ok := <-s.inCh
-			if !ok {
-				batchOk = false
-				return batch[:i], nil
-			}
-			batch[i] = in
-		}
+	// 	for i := uint(0); i < length; i++ {
+	// 		in, ok := <-s.inCh
+	// 		if !ok {
+	// 			batchOk = false
+	// 			return batch[:i], nil
+	// 		}
+	// 		batch[i] = in
+	// 	}
 
-		return batch, nil
-	}
+	// 	return batch, nil
+	// }
 
-	err = s.fn(batchGet, s.put, s.chew)
+	err = s.fn(s.getter, s.put, s.chew)
 	return batchOk, err
 }
 
