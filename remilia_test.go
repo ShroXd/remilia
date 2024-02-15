@@ -117,7 +117,7 @@ func TestDo(t *testing.T) {
 		return nil
 	}
 
-	stageFunc := func(get Get[*Request], put, chew Put[*Request], inCh chan *Request) error {
+	stageFunc := func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
 		return nil
 	}
 

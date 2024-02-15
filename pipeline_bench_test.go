@@ -70,7 +70,7 @@ func BenchmarkPipelineExecution(b *testing.B) {
 					return nil
 				})
 
-				processor := NewStage[int](func(get Get[int], put, chew Put[int], inCh chan int) error {
+				processor := NewStage[int](func(get Get[int], put Put[int], inCh chan int) error {
 					val, _ := get()
 					put(val * 2)
 					return nil

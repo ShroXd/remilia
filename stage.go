@@ -200,17 +200,14 @@ func (s *flow[T]) execute() error {
 	return err
 }
 
-type BatchGetFunc[T any] func() ([]T, error)
-
-type StageFunc[T any] func(get Get[T], put Put[T], chew Put[T], inCh chan T) error
+type StageFunc[T any] func(get Get[T], put Put[T], inCh chan T) error
 type StageDef[T any] func() (*stage[T], error)
 
 type stage[T any] struct {
 	commonStage[T]
-	fn     StageFunc[T]
-	put    Put[T]
-	chew   Put[T]
-	getter func() (T, bool)
+	fn  StageFunc[T]
+	put Put[T]
+	get func() (T, bool)
 }
 
 func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
@@ -235,11 +232,7 @@ func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
 			}
 		}
 
-		stage.chew = func(v T) {
-			stage.inCh <- v
-		}
-
-		stage.getter = func() (out T, ok bool) {
+		stage.get = func() (out T, ok bool) {
 			select {
 			case out, ok = <-stage.inCh:
 				return out, ok
@@ -253,7 +246,7 @@ func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
 func (s *stage[T]) executeOnce() (ok bool, err error) {
 	var batchOk bool
 
-	err = s.fn(s.getter, s.put, s.chew, s.inCh)
+	err = s.fn(s.get, s.put, s.inCh)
 	return batchOk, err
 }
 

@@ -38,18 +38,16 @@ func work() {
 	initURL := "http://localhost:6657/page/1"
 	baseURL := "http://localhost:6657"
 
-	firstParser := func(in *goquery.Document, put remilia.Put[string], chew remilia.Put[string]) {
+	firstParser := func(in *goquery.Document, put remilia.Put[string]) {
 		in.Find("a").Each(func(i int, s *goquery.Selection) {
 			href, ok := s.Attr("href")
 			if ok {
 				put(baseURL + href)
 			}
 		})
-
-		// chew(baseURL + "/page/2")
 	}
 
-	secondParser := func(in *goquery.Document, put remilia.Put[string], chew remilia.Put[string]) {
+	secondParser := func(in *goquery.Document, put remilia.Put[string]) {
 		title := in.Find("p").First().Text()
 		fmt.Println("Article title: ", title)
 	}

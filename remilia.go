@@ -151,8 +151,8 @@ func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put
 	}
 }
 
-func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageFunc[*Request] {
-	return func(get Get[*Request], put Put[*Request], chew Put[*Request], inCh chan *Request) error {
+func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])) StageFunc[*Request] {
+	return func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
 		wrappedPut := func(in string) {
 			if !r.urlMatcher(in) {
 				r.logger.Error("Failed to match url", LogContext{
@@ -170,25 +170,6 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string],
 			}
 
 			put(req)
-		}
-
-		wrappedChew := func(in string) {
-			if !r.urlMatcher(in) {
-				r.logger.Error("Failed to match url", LogContext{
-					"url": in,
-				})
-				return
-			}
-
-			req, err := NewRequest(WithURL(in))
-			if err != nil {
-				r.logger.Error("Failed to create request", LogContext{
-					"err": err,
-				})
-				return
-			}
-
-			chew(req)
 		}
 
 		worker := func(done <-chan struct{}, requests <-chan *Request) <-chan *Response {
@@ -223,7 +204,7 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string],
 		mergedResponses := FanIn(done, workers...)
 
 		for resp := range mergedResponses {
-			fn(resp.document, wrappedPut, wrappedChew)
+			fn(resp.document, wrappedPut)
 		}
 
 		return nil
@@ -234,7 +215,7 @@ func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
 	return NewProcessor[*Request](r.justWrappedFunc(urlStr))
 }
 
-func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string], chew Put[string])) StageDef[*Request] {
+func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string])) StageDef[*Request] {
 	return NewStage[*Request](r.unitWrappedFunc(fn))
 }
 
