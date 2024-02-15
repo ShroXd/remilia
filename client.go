@@ -10,69 +10,74 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/valyala/fasthttp"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
-type DocumentCreator interface {
+type documentCreator interface {
 	NewDocumentFromReader(io.Reader) (*goquery.Document, error)
 }
 
-type DefaultDocumentCreator struct{}
+type defaultDocumentCreator struct{}
 
-func (d DefaultDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
+func (d defaultDocumentCreator) NewDocumentFromReader(r io.Reader) (*goquery.Document, error) {
 	return goquery.NewDocumentFromReader(r)
 }
 
-type InternalClient interface {
+type internalClient interface {
 	Do(req *fasthttp.Request, resp *fasthttp.Response) error
 }
 
-type ReaderFactory struct{}
+type readerFactory struct{}
 
-func (f ReaderFactory) New() *bytes.Reader {
+func (f readerFactory) New() *bytes.Reader {
 	return new(bytes.Reader)
 }
 
-func (f ReaderFactory) Reset(r *bytes.Reader) {
+func (f readerFactory) Reset(r *bytes.Reader) {
 	r.Reset(nil)
 }
 
 type (
-	RequestHook  func(*Client, *Request) error
-	ResponseHook func(*Client, *Response) error
+	requestHook  func(*backendClient, *Request) error
+	responseHook func(*backendClient, *Response) error
 )
 
 // TODO: is this a good preactice to mixin otps for network request and custom functionality?
-type ClientOptionFunc OptionFunc[*Client]
+type clientOptionFunc optionFunc[*backendClient]
 
-type Client struct {
+type backendClient struct {
 	baseURL                 string
 	header                  http.Header
 	timeout                 time.Duration
 	logger                  Logger
-	preRequestHooks         []RequestHook
-	udPreRequestHooks       []RequestHook
+	preRequestHooks         []requestHook
+	udPreRequestHooks       []requestHook
 	udPreRequestHooksLock   sync.RWMutex
-	postResponseHooks       []ResponseHook
-	udPostResponseHooks     []ResponseHook
+	postResponseHooks       []responseHook
+	udPostResponseHooks     []responseHook
 	udPostResponseHooksLock sync.RWMutex
+	transformer             transform.Transformer
 
-	internal    InternalClient
-	docCreator  DocumentCreator
-	backoffPool *Pool[*ExponentialBackoff]
-	readerPool  *Pool[*bytes.Reader]
+	internal    internalClient
+	docCreator  documentCreator
+	backoffPool *abstractPool[*exponentialBackoff]
+	readerPool  *abstractPool[*bytes.Reader]
 }
 
-func NewClient(opts ...ClientOptionFunc) (*Client, error) {
-	c := &Client{
-		backoffPool: NewPool[*ExponentialBackoff](NewExponentialBackoffFactory(
-			WithMinDelay(1*time.Second),
-			WithMaxDelay(10*time.Second),
-			WithMultiplier(2.0),
+func newClient(opts ...clientOptionFunc) (*backendClient, error) {
+	c := &backendClient{
+		backoffPool: newPool[*exponentialBackoff](newExponentialBackoffFactory(
+			withMinDelay(1*time.Second),
+			withMaxDelay(10*time.Second),
+			withMultiplier(2.0),
 		)),
-		readerPool: NewPool[*bytes.Reader](ReaderFactory{}),
+		readerPool: newPool[*bytes.Reader](readerFactory{}),
 	}
 
 	c.header = http.Header{}
+	// TODO: pass from root level
+	c.transformer = simplifiedchinese.GBK.NewDecoder()
 	for _, optFn := range opts {
 		if err := optFn(c); err != nil {
 			return nil, err
@@ -82,15 +87,15 @@ func NewClient(opts ...ClientOptionFunc) (*Client, error) {
 	return c, nil
 }
 
-func WithBaseURL(url string) ClientOptionFunc {
-	return func(c *Client) error {
+func withBaseURL(url string) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.baseURL = url
 		return nil
 	}
 }
 
-func WithHeaders(headers map[string]string) ClientOptionFunc {
-	return func(c *Client) error {
+func withHeaders(headers map[string]string) clientOptionFunc {
+	return func(c *backendClient) error {
 		for h, v := range headers {
 			c.header.Set(h, v)
 		}
@@ -98,25 +103,25 @@ func WithHeaders(headers map[string]string) ClientOptionFunc {
 	}
 }
 
-func WithTimeout(timeout time.Duration) ClientOptionFunc {
-	return func(c *Client) error {
+func withTimeout(timeout time.Duration) clientOptionFunc {
+	return func(c *backendClient) error {
 		if timeout < 0 {
-			return ErrInvalidTimeout
+			return errInvalidTimeout
 		}
 		c.timeout = timeout
 		return nil
 	}
 }
 
-func WithClientLogger(logger Logger) ClientOptionFunc {
-	return func(c *Client) error {
+func withClientLogger(logger Logger) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.logger = logger
 		return nil
 	}
 }
 
-func WithPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
-	return func(c *Client) error {
+func withPreRequestHooks(hooks ...requestHook) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.udPreRequestHooksLock.Lock()
 		defer c.udPreRequestHooksLock.Unlock()
 
@@ -125,8 +130,8 @@ func WithPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
 	}
 }
 
-func WithPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
-	return func(c *Client) error {
+func withPostResponseHooks(hooks ...responseHook) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.udPostResponseHooksLock.Lock()
 		defer c.udPostResponseHooksLock.Unlock()
 
@@ -135,49 +140,56 @@ func WithPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
 	}
 }
 
-func WithInternalPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
-	return func(c *Client) error {
+func withInternalPreRequestHooks(hooks ...requestHook) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.preRequestHooks = append(c.preRequestHooks, hooks...)
 		return nil
 	}
 }
 
-func WithInternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
-	return func(c *Client) error {
+func withInternalPostResponseHooks(hooks ...responseHook) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.postResponseHooks = append(c.postResponseHooks, hooks...)
 		return nil
 	}
 }
 
-func WithInternalClient(client InternalClient) ClientOptionFunc {
-	return func(c *Client) error {
+func withInternalClient(client internalClient) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.internal = client
 		return nil
 	}
 }
 
-func WithDocumentCreator(creator DocumentCreator) ClientOptionFunc {
-	return func(c *Client) error {
+func withDocumentCreator(creator documentCreator) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.docCreator = creator
 		return nil
 	}
 }
 
-func WithBackoffPool(backoffPool *Pool[*ExponentialBackoff]) ClientOptionFunc {
-	return func(c *Client) error {
+func withBackoffPool(backoffPool *abstractPool[*exponentialBackoff]) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.backoffPool = backoffPool
 		return nil
 	}
 }
 
-func WithReaderPool(readerPool *Pool[*bytes.Reader]) ClientOptionFunc {
-	return func(c *Client) error {
+func withReaderPool(readerPool *abstractPool[*bytes.Reader]) clientOptionFunc {
+	return func(c *backendClient) error {
 		c.readerPool = readerPool
 		return nil
 	}
 }
 
-func (c *Client) Execute(request *Request) (*Response, error) {
+func withTransformer(transformer transform.Transformer) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.transformer = transformer
+		return nil
+	}
+}
+
+func (c *backendClient) execute(request *Request) (*Response, error) {
 	c.udPreRequestHooksLock.RLock()
 	defer c.udPreRequestHooksLock.RUnlock()
 
@@ -196,20 +208,20 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 		}
 	}
 
-	req := request.Build()
+	req := request.build()
 
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
 
-	backoff := c.backoffPool.Get()
+	backoff := c.backoffPool.get()
 	op := func() error {
 		return c.internal.Do(req, resp)
 	}
-	err := Retry(context.TODO(), op, backoff)
-	c.backoffPool.Put(backoff)
+	err := retry(context.TODO(), op, backoff)
+	c.backoffPool.put(backoff)
 
 	if err != nil {
-		c.logger.Error("Failed to execute request", LogContext{
+		c.logger.Error("Failed to execute request", logContext{
 			"err": err,
 		})
 		return nil, err
@@ -219,12 +231,13 @@ func (c *Client) Execute(request *Request) (*Response, error) {
 		fasthttp.ReleaseRequest(req)
 	}()
 
-	reader := c.readerPool.Get()
+	reader := c.readerPool.get()
 	reader.Reset(resp.Body())
-	doc, err := c.docCreator.NewDocumentFromReader(reader)
-	c.readerPool.Put(reader)
+	transformer := transform.NewReader(reader, c.transformer)
+	doc, err := c.docCreator.NewDocumentFromReader(transformer)
+	c.readerPool.put(reader)
 	if err != nil {
-		c.logger.Error("Failed to build goquery document", LogContext{
+		c.logger.Error("Failed to build goquery document", logContext{
 			"err": err,
 		})
 		return nil, err

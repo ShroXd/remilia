@@ -14,9 +14,9 @@ type Request struct {
 	QueryParams map[string]string
 }
 
-type RequestOption func(*Request) error
+type requestOption func(*Request) error
 
-func WithMethod(method string) RequestOption {
+func withMethod(method string) requestOption {
 	return func(req *Request) error {
 		if method == "GET" || method == "POST" || method == "PUT" || method == "DELETE" {
 			req.Method = method
@@ -27,35 +27,35 @@ func WithMethod(method string) RequestOption {
 	}
 }
 
-func WithURL(url string) RequestOption {
+func withURL(url string) requestOption {
 	return func(req *Request) error {
 		req.URL = url
 		return nil
 	}
 }
 
-func WithHeader(key, value string) RequestOption {
+func withHeader(key, value string) requestOption {
 	return func(req *Request) error {
 		req.Headers[key] = value
 		return nil
 	}
 }
 
-func WithBody(body []byte) RequestOption {
+func withBody(body []byte) requestOption {
 	return func(req *Request) error {
 		req.Body = body
 		return nil
 	}
 }
 
-func WithQueryParam(key, value string) RequestOption {
+func withQueryParam(key, value string) requestOption {
 	return func(req *Request) error {
 		req.QueryParams[key] = value
 		return nil
 	}
 }
 
-func NewRequest(opts ...RequestOption) (*Request, error) {
+func newRequest(opts ...requestOption) (*Request, error) {
 	req := &Request{
 		Headers:     make(map[string]string),
 		QueryParams: make(map[string]string),
@@ -71,12 +71,12 @@ func NewRequest(opts ...RequestOption) (*Request, error) {
 	return req, nil
 }
 
-func EmptyRequest() *Request {
+func emptyRequest() *Request {
 	// TODO: re-use the existing request insteace
 	return &Request{}
 }
 
-func (req *Request) Build() *fasthttp.Request {
+func (req *Request) build() *fasthttp.Request {
 	fasthttpReq := fasthttp.AcquireRequest()
 
 	fasthttpReq.Header.SetMethod(req.Method)

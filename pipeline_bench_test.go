@@ -63,18 +63,18 @@ func BenchmarkPipelineExecution(b *testing.B) {
 			// Reset timer to exclude setup time
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				generator := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+				generator := newProcessor[int](func(get Get[int], put, chew Put[int]) error {
 					for i := 0; i < tc.dataSize; i++ {
 						put(i)
 					}
 					return nil
 				})
 
-				processor := NewStage[int](func(get Get[int], put Put[int], inCh chan int) error {
+				processor := newStage[int](func(get Get[int], put Put[int], inCh chan int) error {
 					val, _ := get()
 					put(val * 2)
 					return nil
-				}, Concurrency(uint(tc.concurrency)))
+				}, withConcurrency(uint(tc.concurrency)))
 
 				pipeline, _ := newPipeline[int](generator, processor)
 				pipeline.execute()

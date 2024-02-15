@@ -83,24 +83,24 @@ func TestJustWrappedFunc(t *testing.T) {
 	assert.Equal(t, urlStr, requests[0].URL, "justFunc should put the correct request")
 }
 
-type MockHTTPClient struct {
+type mockHTTPClient struct {
 	mock.Mock
 }
 
-func (m *MockHTTPClient) Execute(request *Request) (*Response, error) {
+func (m *mockHTTPClient) execute(request *Request) (*Response, error) {
 	args := m.Called(request)
 	return args.Get(0).(*Response), args.Error(1)
 }
 
 func setupWrappedFuncTest(t *testing.T) (*Remilia, *observer.ObservedLogs) {
-	mockClient := new(MockHTTPClient)
-	mockClient.On("Execute", mock.Anything).Return(&Response{
+	mockClient := new(mockHTTPClient)
+	mockClient.On("execute", mock.Anything).Return(&Response{
 		document: &goquery.Document{},
 	}, nil)
 
 	core, recorded := observer.New(zap.DebugLevel)
 	zapLogger := zap.New(core)
-	logger := &DefaultLogger{internal: zapLogger}
+	logger := &defaultLogger{internal: zapLogger}
 
 	instance := &Remilia{
 		client: mockClient,
@@ -121,7 +121,7 @@ func TestDo(t *testing.T) {
 		return nil
 	}
 
-	err := instance.Do(NewProcessor(processorFunc), NewStage(stageFunc))
+	err := instance.Do(newProcessor(processorFunc), newStage(stageFunc))
 
 	assert.NoError(t, err, "Do should not return an error")
 }

@@ -2,6 +2,6 @@ package remilia
 
 import "errors"
 
-var ErrInvalidInputBufferSize = errors.New("invalid input buffer size")
-var ErrInvalidConcurrency = errors.New("invalid concurrency")
-var ErrInvalidTimeout = errors.New("invalid timeout")
+var errInvalidInputBufferSize = errors.New("invalid input buffer size")
+var errInvalidConcurrency = errors.New("invalid concurrency")
+var errInvalidTimeout = errors.New("invalid timeout")

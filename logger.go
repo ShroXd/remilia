@@ -10,46 +10,46 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type LogContext map[string]interface{}
+type logContext map[string]interface{}
 
 type Logger interface {
-	Debug(msg string, context ...LogContext)
-	Info(msg string, context ...LogContext)
-	Warn(msg string, context ...LogContext)
-	Error(msg string, context ...LogContext)
-	Panic(msg string, context ...LogContext)
+	Debug(msg string, context ...logContext)
+	Info(msg string, context ...logContext)
+	Warn(msg string, context ...logContext)
+	Error(msg string, context ...logContext)
+	Panic(msg string, context ...logContext)
 }
 
-type DefaultLogger struct {
+type defaultLogger struct {
 	internal *zap.Logger
 }
 
-func (l *DefaultLogger) Debug(msg string, context ...LogContext) {
+func (l *defaultLogger) Debug(msg string, context ...logContext) {
 	fields := convertToZapFields(getContext(context))
 	l.internal.Debug(msg, fields...)
 }
 
-func (l *DefaultLogger) Info(msg string, context ...LogContext) {
+func (l *defaultLogger) Info(msg string, context ...logContext) {
 	fields := convertToZapFields(getContext((context)))
 	l.internal.Info(msg, fields...)
 }
 
-func (l *DefaultLogger) Warn(msg string, context ...LogContext) {
+func (l *defaultLogger) Warn(msg string, context ...logContext) {
 	fields := convertToZapFields(getContext(context))
 	l.internal.Warn(msg, fields...)
 }
 
-func (l *DefaultLogger) Error(msg string, context ...LogContext) {
+func (l *defaultLogger) Error(msg string, context ...logContext) {
 	fields := convertToZapFields(getContext(context))
 	l.internal.Error(msg, fields...)
 }
 
-func (l *DefaultLogger) Panic(msg string, context ...LogContext) {
+func (l *defaultLogger) Panic(msg string, context ...logContext) {
 	fields := convertToZapFields(getContext(context))
 	l.internal.Panic(msg, fields...)
 }
 
-func getContext(context []LogContext) LogContext {
+func getContext(context []logContext) logContext {
 	if len(context) > 0 {
 		return context[0]
 	}
@@ -57,35 +57,35 @@ func getContext(context []LogContext) LogContext {
 	return nil
 }
 
-type LogLevel int8
+type logLevel int8
 
 const (
-	DebugLevel LogLevel = iota - 1
-	InfoLevel
-	WarnLevel
-	ErrorLevel
+	debugLevel logLevel = iota - 1
+	infoLevel
+	warnLevel
+	errorLevel
 )
 
-func (level LogLevel) toZapLevel() zapcore.Level {
+func (level logLevel) toZapLevel() zapcore.Level {
 	switch level {
-	case DebugLevel:
+	case debugLevel:
 		return zap.DebugLevel
-	case InfoLevel:
+	case infoLevel:
 		return zap.InfoLevel
-	case WarnLevel:
+	case warnLevel:
 		return zap.WarnLevel
-	case ErrorLevel:
+	case errorLevel:
 		return zap.ErrorLevel
 	default:
 		return zap.InfoLevel
 	}
 }
 
-type LoggerConfig struct {
+type loggerConfig struct {
 	ID           string
 	Name         string
-	ConsoleLevel LogLevel
-	FileLevel    LogLevel
+	ConsoleLevel logLevel
+	FileLevel    logLevel
 }
 
 func newConsoleCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) zapcore.Core {
@@ -96,7 +96,7 @@ func newConsoleCore(encoderConfig zapcore.EncoderConfig, level zapcore.Level) za
 	)
 }
 
-func newFileCore(fs FileSystemOperations, encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
+func newFileCore(fs fileSystemOperations, encoderConfig zapcore.EncoderConfig, level zapcore.Level, fileName string) (zapcore.Core, error) {
 	logDir := "logs"
 	if err := fs.MkdirAll(logDir, os.ModePerm); err != nil {
 		return nil, err
@@ -115,12 +115,12 @@ func newFileCore(fs FileSystemOperations, encoderConfig zapcore.EncoderConfig, l
 	), nil
 }
 
-func getLogFileName(c *LoggerConfig) string {
+func getLogFileName(c *loggerConfig) string {
 	timeFormat := "20060102_150405"
 	return fmt.Sprintf("%s_%s_%s.log", c.ID, c.Name, time.Now().Format(timeFormat))
 }
 
-func createLogger(c *LoggerConfig, fs FileSystemOperations) (*DefaultLogger, error) {
+func createLogger(c *loggerConfig, fs fileSystemOperations) (*defaultLogger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
@@ -136,7 +136,7 @@ func createLogger(c *LoggerConfig, fs FileSystemOperations) (*DefaultLogger, err
 		zap.String("Name", c.Name),
 	)
 
-	return &DefaultLogger{
+	return &defaultLogger{
 		internal: zlogger,
 	}, nil
 }

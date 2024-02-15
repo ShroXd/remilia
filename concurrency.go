@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-func FanIn[T any](done <-chan struct{}, channels ...<-chan T) <-chan T {
+func fanIn[T any](done <-chan struct{}, channels ...<-chan T) <-chan T {
 	var wg sync.WaitGroup
 	output := make(chan T)
 
@@ -53,7 +53,7 @@ func orDone[T any](c <-chan T) <-chan T {
 	return valStream
 }
 
-func Tee[T any](ctx context.Context, input <-chan T, wg *sync.WaitGroup) (<-chan T, <-chan T) {
+func tee[T any](ctx context.Context, input <-chan T, wg *sync.WaitGroup) (<-chan T, <-chan T) {
 	out1 := make(chan T)
 	out2 := make(chan T)
 

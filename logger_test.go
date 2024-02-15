@@ -17,11 +17,11 @@ import (
 func TestLoggerLevels(t *testing.T) {
 	core, recorded := observer.New(zap.DebugLevel)
 	zapLogger := zap.New(core)
-	logger := &DefaultLogger{internal: zapLogger}
+	logger := &defaultLogger{internal: zapLogger}
 
 	tests := []struct {
 		name    string
-		logFunc func(msg string, context ...LogContext)
+		logFunc func(msg string, context ...logContext)
 		level   zapcore.Level
 	}{
 		{"Debug", logger.Debug, zap.DebugLevel},
@@ -33,7 +33,7 @@ func TestLoggerLevels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			recorded.TakeAll()
-			context := LogContext{"key": "value"}
+			context := logContext{"key": "value"}
 
 			tt.logFunc("test message", context)
 
@@ -65,7 +65,7 @@ func TestLoggerLevels(t *testing.T) {
 func TestPanicLog(t *testing.T) {
 	core, recorded := observer.New(zap.DebugLevel)
 	zapLogger := zap.New(core)
-	logger := &DefaultLogger{internal: zapLogger}
+	logger := &defaultLogger{internal: zapLogger}
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -80,19 +80,19 @@ func TestPanicLog(t *testing.T) {
 		assert.Equal(t, "test message", entry.Message, "Incorrect message")
 	}()
 
-	logger.Panic("test message", LogContext{"key": "value"})
+	logger.Panic("test message", logContext{"key": "value"})
 }
 
 func TestToZapLevel(t *testing.T) {
 	tests := []struct {
 		name     string
-		logLevel LogLevel
+		logLevel logLevel
 		expected zapcore.Level
 	}{
-		{"DebugLevel", DebugLevel, zapcore.DebugLevel},
-		{"InfoLevel", InfoLevel, zapcore.InfoLevel},
-		{"WarnLevel", WarnLevel, zapcore.WarnLevel},
-		{"ErrorLevel", ErrorLevel, zapcore.ErrorLevel},
+		{"DebugLevel", debugLevel, zapcore.DebugLevel},
+		{"InfoLevel", infoLevel, zapcore.InfoLevel},
+		{"WarnLevel", warnLevel, zapcore.WarnLevel},
+		{"ErrorLevel", errorLevel, zapcore.ErrorLevel},
 		{"Default", 127, zapcore.InfoLevel},
 	}
 
@@ -143,17 +143,17 @@ func TestNewConsoleCore(t *testing.T) {
 	}
 }
 
-type MockFileSystem struct {
+type mockFileSystem struct {
 	MkdirAllErr  error
 	OpenFileErr  error
 	OpenFileMock *os.File
 }
 
-func (mfs MockFileSystem) MkdirAll(path string, perm os.FileMode) error {
+func (mfs mockFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return mfs.MkdirAllErr
 }
 
-func (mfs MockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+func (mfs mockFileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return mfs.OpenFileMock, mfs.OpenFileErr
 }
 
@@ -188,9 +188,9 @@ func TestNewFileCore(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// TODO: consider if it's necessary to use MockFileSystem
-			fs := &FileSystem{}
+			fs := &fileSystem{}
 			encoderConfig := zap.NewProductionEncoderConfig()
-			logFileName := getLogFileName(&LoggerConfig{
+			logFileName := getLogFileName(&loggerConfig{
 				ID:   "test",
 				Name: "unit",
 			})
@@ -207,12 +207,12 @@ func TestNewFileCore(t *testing.T) {
 	}
 
 	t.Run("Error on creating log file", func(t *testing.T) {
-		mockFS := MockFileSystem{
+		mockFS := mockFileSystem{
 			MkdirAllErr: errors.New("mkdir error"),
 		}
 
 		encoderConfig := zap.NewProductionEncoderConfig()
-		logFileName := getLogFileName(&LoggerConfig{
+		logFileName := getLogFileName(&loggerConfig{
 			ID:   "test",
 			Name: "unit",
 		})
@@ -226,12 +226,12 @@ func TestNewFileCore(t *testing.T) {
 	})
 
 	t.Run("Error on open file", func(t *testing.T) {
-		mockFS := MockFileSystem{
+		mockFS := mockFileSystem{
 			OpenFileErr: errors.New("test open file error"),
 		}
 
 		encoderConfig := zap.NewProductionEncoderConfig()
-		logFileName := getLogFileName(&LoggerConfig{
+		logFileName := getLogFileName(&loggerConfig{
 			ID:   "test",
 			Name: "unit",
 		})
@@ -246,7 +246,7 @@ func TestNewFileCore(t *testing.T) {
 }
 
 func TestGetLogFileName(t *testing.T) {
-	testConfig := LoggerConfig{
+	testConfig := loggerConfig{
 		ID:   "123",
 		Name: "testLogger",
 	}
@@ -263,22 +263,22 @@ func TestGetLogFileName(t *testing.T) {
 func TestCreateLogger(t *testing.T) {
 	tests := []struct {
 		name      string
-		config    LoggerConfig
+		config    loggerConfig
 		expectErr bool
 	}{
 		{
 			name: "Valid Config",
-			config: LoggerConfig{
+			config: loggerConfig{
 				ID:           "testID",
 				Name:         "testLogger",
-				ConsoleLevel: InfoLevel,
-				FileLevel:    DebugLevel,
+				ConsoleLevel: infoLevel,
+				FileLevel:    debugLevel,
 			},
 			expectErr: false,
 		},
 	}
 
-	fs := &FileSystem{}
+	fs := &fileSystem{}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,15 +295,15 @@ func TestCreateLogger(t *testing.T) {
 	}
 
 	t.Run("Error on creating log file", func(t *testing.T) {
-		mockFS := MockFileSystem{
+		mockFS := mockFileSystem{
 			MkdirAllErr: errors.New("test mkdir error"),
 		}
 
-		config := LoggerConfig{
+		config := loggerConfig{
 			ID:           "testID",
 			Name:         "testLogger",
-			ConsoleLevel: InfoLevel,
-			FileLevel:    DebugLevel,
+			ConsoleLevel: infoLevel,
+			FileLevel:    debugLevel,
 		}
 
 		logger, err := createLogger(&config, mockFS)

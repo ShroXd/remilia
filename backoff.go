@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type Random interface {
+type randomWrapper interface {
 	Int63n(n int64) int64
 }
 
@@ -17,14 +17,14 @@ func (r *defaultRandom) Int63n(n int64) int64 {
 	return rand.Int63n(n)
 }
 
-type Backoff interface {
+type backoff interface {
 	Reset()
 	Next() time.Duration
 	GetMaxAttempt() uint8
 	GetCurrentAttempt() uint8
 }
 
-type ExponentialBackoff struct {
+type exponentialBackoff struct {
 	minDelay      time.Duration
 	maxDelay      time.Duration
 	multiplier    float64
@@ -32,28 +32,28 @@ type ExponentialBackoff struct {
 	maxAttempt    uint8
 	linearAttempt uint8
 
-	random  Random
-	backoff JitterBackoff
+	random  randomWrapper
+	backoff jitterBackoff
 }
 
 var (
-	DefaultMinDelay      = 100 * time.Millisecond
-	DefaultMaxDelay      = 10 * time.Second
-	DefaultMultiplier    = 2.0
-	DefaultMaxAttempt    = uint8(10)
-	DefaultLinearAttempt = uint8(5)
-	DefaultRandom        = &defaultRandom{}
+	defaultMinDelay      = 100 * time.Millisecond
+	defaultMaxDelay      = 10 * time.Second
+	defaultMultiplier    = 2.0
+	defaultMaxAttempt    = uint8(10)
+	defaultLinearAttempt = uint8(5)
+	defaultRandomStruct  = &defaultRandom{}
 )
 
-func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFunc) *ExponentialBackoff {
-	eb := &ExponentialBackoff{
-		minDelay:      DefaultMinDelay,
-		maxDelay:      DefaultMaxDelay,
-		multiplier:    DefaultMultiplier,
+func newExponentialBackoff(optFns ...exponentialBackoffOptionFunc) *exponentialBackoff {
+	eb := &exponentialBackoff{
+		minDelay:      defaultMinDelay,
+		maxDelay:      defaultMaxDelay,
+		multiplier:    defaultMultiplier,
 		attempt:       0,
-		maxAttempt:    DefaultMaxAttempt,
-		linearAttempt: DefaultLinearAttempt,
-		random:        DefaultRandom,
+		maxAttempt:    defaultMaxAttempt,
+		linearAttempt: defaultLinearAttempt,
+		random:        defaultRandomStruct,
 	}
 
 	// TODO: return the error from option func
@@ -61,78 +61,78 @@ func NewExponentialBackoff(optFns ...ExponentialBackoffOptionFunc) *ExponentialB
 		optFn(eb)
 	}
 
-	eb.backoff = FullJitterBuilder(eb.minDelay, eb.maxDelay, eb.multiplier, eb.random)
+	eb.backoff = fullJitterBuilder(eb.minDelay, eb.maxDelay, eb.multiplier, eb.random)
 	eb.Reset()
 
 	return eb
 }
 
-type ExponentialBackoffOptionFunc OptionFunc[*ExponentialBackoff]
+type exponentialBackoffOptionFunc optionFunc[*exponentialBackoff]
 
-func WithMinDelay(d time.Duration) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withMinDelay(d time.Duration) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.minDelay = d
 		return nil
 	}
 }
 
-func WithMaxDelay(d time.Duration) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withMaxDelay(d time.Duration) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.maxDelay = d
 		return nil
 	}
 }
 
-func WithMultiplier(m float64) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withMultiplier(m float64) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.multiplier = m
 		return nil
 	}
 }
 
-func WithRandomImp(r Random) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withRandomImp(r randomWrapper) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.random = r
 		return nil
 	}
 }
 
-func WithMaxAttempt(a uint8) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withMaxAttempt(a uint8) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.maxAttempt = a
 		return nil
 	}
 }
 
-func WithLinearAttempt(a uint8) ExponentialBackoffOptionFunc {
-	return func(eb *ExponentialBackoff) error {
+func withLinearAttempt(a uint8) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
 		eb.linearAttempt = a
 		return nil
 	}
 }
 
-func (eb *ExponentialBackoff) Reset() {
+func (eb *exponentialBackoff) Reset() {
 	eb.attempt = 0
 }
 
-func (eb *ExponentialBackoff) Next() time.Duration {
+func (eb *exponentialBackoff) Next() time.Duration {
 	eb.attempt++
 	delay := eb.backoff(eb.attempt)
 
 	return delay
 }
 
-func (eb *ExponentialBackoff) GetMaxAttempt() uint8 {
+func (eb *exponentialBackoff) GetMaxAttempt() uint8 {
 	return eb.maxAttempt
 }
 
-func (eb *ExponentialBackoff) GetCurrentAttempt() uint8 {
+func (eb *exponentialBackoff) GetCurrentAttempt() uint8 {
 	return eb.attempt
 }
 
-type JitterBackoff func(attempt uint8) time.Duration
+type jitterBackoff func(attempt uint8) time.Duration
 
-func FullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplier float64, random Random) JitterBackoff {
+func fullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplier float64, random randomWrapper) jitterBackoff {
 	return func(attempt uint8) time.Duration {
 		cap := float64(capacity)
 		att := float64(attempt)
@@ -150,27 +150,27 @@ func FullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplie
 	}
 }
 
-type ExponentialBackoffFactory struct {
-	opts []ExponentialBackoffOptionFunc
+type exponentialBackoffFactory struct {
+	opts []exponentialBackoffOptionFunc
 }
 
-func NewExponentialBackoffFactory(opts ...ExponentialBackoffOptionFunc) *ExponentialBackoffFactory {
-	return &ExponentialBackoffFactory{
+func newExponentialBackoffFactory(opts ...exponentialBackoffOptionFunc) *exponentialBackoffFactory {
+	return &exponentialBackoffFactory{
 		opts: opts,
 	}
 }
 
-func (f *ExponentialBackoffFactory) New() *ExponentialBackoff {
-	return NewExponentialBackoff(f.opts...)
+func (f *exponentialBackoffFactory) New() *exponentialBackoff {
+	return newExponentialBackoff(f.opts...)
 }
 
-func (f *ExponentialBackoffFactory) Reset(eb *ExponentialBackoff) {
+func (f *exponentialBackoffFactory) Reset(eb *exponentialBackoff) {
 	eb.Reset()
 }
 
-type RetryableFunc func() error
+type retryableFunc func() error
 
-func Retry(ctx context.Context, op RetryableFunc, eb Backoff) error {
+func retry(ctx context.Context, op retryableFunc, eb backoff) error {
 	var lastErr error
 	maxAttempts := eb.GetMaxAttempt()
 

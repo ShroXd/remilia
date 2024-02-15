@@ -11,9 +11,9 @@ type stageOptions struct {
 	inputBufferSize uint
 }
 
-type StageOptionFn OptionFunc[*stageOptions]
+type stageOptionFn optionFunc[*stageOptions]
 
-func buildStageOptions(optFns []StageOptionFn) (*stageOptions, error) {
+func buildStageOptions(optFns []stageOptionFn) (*stageOptions, error) {
 	so := &stageOptions{
 		concurrency: uint(1),
 	}
@@ -25,27 +25,27 @@ func buildStageOptions(optFns []StageOptionFn) (*stageOptions, error) {
 	return so, nil
 }
 
-func Name(name string) StageOptionFn {
+func withName(name string) stageOptionFn {
 	return func(so *stageOptions) error {
 		so.name = name
 		return nil
 	}
 }
 
-func Concurrency(concurrency uint) StageOptionFn {
+func withConcurrency(concurrency uint) stageOptionFn {
 	return func(so *stageOptions) error {
 		if concurrency == 0 {
-			return ErrInvalidConcurrency
+			return errInvalidConcurrency
 		}
 		so.concurrency = concurrency
 		return nil
 	}
 }
 
-func InputBufferSize(size uint) StageOptionFn {
+func withInputBufferSize(size uint) stageOptionFn {
 	return func(so *stageOptions) error {
 		if size == 0 {
-			return ErrInvalidInputBufferSize
+			return errInvalidInputBufferSize
 		}
 		so.inputBufferSize = size
 		return nil
@@ -87,17 +87,17 @@ type Get[T any] func() (T, bool)
 // get - get data from upstream
 // put - put data to downstream
 // chew - put data back to upstream
-type WorkFn[T any] func(get Get[T], put Put[T], chew Put[T]) error
+type workFn[T any] func(get Get[T], put Put[T], chew Put[T]) error
 
-type ProcessorDef[T any] func() (*processor[T], error)
+type processorDef[T any] func() (*processor[T], error)
 
 type processor[T any] struct {
 	commonStage[T]
-	fn     WorkFn[T]
+	fn     workFn[T]
 	getter func() (T, bool)
 }
 
-func buildProcessor[T any](fn WorkFn[T], opts *stageOptions) *processor[T] {
+func buildProcessor[T any](fn workFn[T], opts *stageOptions) *processor[T] {
 	p := &processor[T]{
 		commonStage: commonStage[T]{
 			opts:        opts,
@@ -120,7 +120,7 @@ func buildProcessor[T any](fn WorkFn[T], opts *stageOptions) *processor[T] {
 	return p
 }
 
-func NewProcessor[T any](fn WorkFn[T], optFns ...StageOptionFn) ProcessorDef[T] {
+func newProcessor[T any](fn workFn[T], optFns ...stageOptionFn) processorDef[T] {
 	return func() (*processor[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
@@ -144,15 +144,15 @@ func (p *processor[T]) execute() error {
 	return p.fn(p.getter, put, chew)
 }
 
-type FlowFn[T any] func(in T) (out T, err error)
-type FlowDef[T any] func() (*flow[T], error)
+type flowFn[T any] func(in T) (out T, err error)
+type flowDef[T any] func() (*flow[T], error)
 
 type flow[T any] struct {
 	commonStage[T]
-	fn FlowFn[T]
+	fn flowFn[T]
 }
 
-func buildFlow[T any](fn FlowFn[T], opts *stageOptions) *flow[T] {
+func buildFlow[T any](fn flowFn[T], opts *stageOptions) *flow[T] {
 	return &flow[T]{
 		commonStage: commonStage[T]{
 			opts:        opts,
@@ -163,7 +163,7 @@ func buildFlow[T any](fn FlowFn[T], opts *stageOptions) *flow[T] {
 	}
 }
 
-func NewFlow[T any](fn FlowFn[T], optFns ...StageOptionFn) FlowDef[T] {
+func newFlow[T any](fn flowFn[T], optFns ...stageOptionFn) flowDef[T] {
 	return func() (*flow[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
@@ -200,17 +200,17 @@ func (s *flow[T]) execute() error {
 	return err
 }
 
-type StageFunc[T any] func(get Get[T], put Put[T], inCh chan T) error
-type StageDef[T any] func() (*stage[T], error)
+type stageFunc[T any] func(get Get[T], put Put[T], inCh chan T) error
+type stageDef[T any] func() (*stage[T], error)
 
 type stage[T any] struct {
 	commonStage[T]
-	fn  StageFunc[T]
+	fn  stageFunc[T]
 	put Put[T]
 	get func() (T, bool)
 }
 
-func NewStage[T any](fn StageFunc[T], optFns ...StageOptionFn) StageDef[T] {
+func newStage[T any](fn stageFunc[T], optFns ...stageOptionFn) stageDef[T] {
 	return func() (*stage[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {

@@ -2,18 +2,18 @@ package remilia
 
 import "sync"
 
-type Factory[T any] interface {
+type abstractFactory[T any] interface {
 	New() T
 	Reset(T)
 }
 
-type Pool[T any] struct {
-	factory Factory[T]
+type abstractPool[T any] struct {
+	factory abstractFactory[T]
 	pool    *sync.Pool
 }
 
-func NewPool[T any](factory Factory[T]) *Pool[T] {
-	return &Pool[T]{
+func newPool[T any](factory abstractFactory[T]) *abstractPool[T] {
+	return &abstractPool[T]{
 		factory: factory,
 		pool: &sync.Pool{
 			New: func() any {
@@ -23,11 +23,11 @@ func NewPool[T any](factory Factory[T]) *Pool[T] {
 	}
 }
 
-func (p *Pool[T]) Get() T {
+func (p *abstractPool[T]) get() T {
 	return p.pool.Get().(T)
 }
 
-func (p *Pool[T]) Put(item T) {
+func (p *abstractPool[T]) put(item T) {
 	p.factory.Reset(item)
 	p.pool.Put(item)
 }

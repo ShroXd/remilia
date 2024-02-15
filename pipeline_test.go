@@ -9,17 +9,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func MockProcessorDef() (*processor[any], error) {
+func mockProcessorDef() (*processor[any], error) {
 	return &processor[any]{}, nil
 }
 
-func MockStageDef() (*stage[any], error) {
+func mockStageDef() (*stage[any], error) {
 	return &stage[any]{}, nil
 }
 
 func TestNewPipeline(t *testing.T) {
 	t.Run("NewPipeline with no stages", func(t *testing.T) {
-		_, err := newPipeline[any](MockProcessorDef, MockStageDef, MockStageDef)
+		_, err := newPipeline[any](mockProcessorDef, mockStageDef, mockStageDef)
 		assert.NoError(t, err, "newPipeline should not return error")
 	})
 
@@ -27,7 +27,7 @@ func TestNewPipeline(t *testing.T) {
 		errorProducerDef := func() (*processor[any], error) {
 			return nil, errors.New("producer error")
 		}
-		_, err := newPipeline[any](errorProducerDef, MockStageDef)
+		_, err := newPipeline[any](errorProducerDef, mockStageDef)
 		assert.Error(t, err, "newPipeline should have failed with producer error")
 	})
 
@@ -39,19 +39,19 @@ func TestNewPipeline(t *testing.T) {
 			return &stage[any]{}, nil
 		}
 
-		_, err := newPipeline[any](MockProcessorDef, errorStageDef, normalStageDef)
+		_, err := newPipeline[any](mockProcessorDef, errorStageDef, normalStageDef)
 		assert.Error(t, err, "newPipeline should have failed with stage error")
 	})
 }
 
 func TestPipelineExecute(t *testing.T) {
 	t.Run("Successful execute", func(t *testing.T) {
-		generator := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+		generator := newProcessor[int](func(get Get[int], put, chew Put[int]) error {
 			put(1)
 			return nil
 		})
 
-		processor := NewStage[int](func(get Get[int], put Put[int], inCh chan int) error {
+		processor := newStage[int](func(get Get[int], put Put[int], inCh chan int) error {
 			arr, _ := get()
 			put(arr * 2)
 			// TODO: chew has bug with closed channel
@@ -66,12 +66,12 @@ func TestPipelineExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execute when any stage returns error", func(t *testing.T) {
-		generator := NewProcessor[int](func(get Get[int], put, chew Put[int]) error {
+		generator := newProcessor[int](func(get Get[int], put, chew Put[int]) error {
 			put(1)
 			return nil
 		})
 
-		errProcessor := NewStage[int](func(get Get[int], put Put[int], inCh chan int) error {
+		errProcessor := newStage[int](func(get Get[int], put Put[int], inCh chan int) error {
 			return errors.New("test error")
 		})
 

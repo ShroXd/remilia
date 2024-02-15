@@ -2,7 +2,7 @@ package remilia
 
 import "regexp"
 
-func GetOrDefault(s *string, def string) string {
+func getOrDefault(s *string, def string) string {
 	if s == nil || *s == "" {
 		return def
 	}
@@ -10,7 +10,7 @@ func GetOrDefault(s *string, def string) string {
 	return *s
 }
 
-func URLMatcher() func(s string) bool {
+func urlMatcher() func(s string) bool {
 	urlPattern := `^(https?|ftp)://[^\s/$.?#].[^\s]*$`
 	urlRegex, _ := regexp.Compile(urlPattern)
 

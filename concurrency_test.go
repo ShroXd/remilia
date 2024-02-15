@@ -14,7 +14,7 @@ func TestFanIn(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		out := FanIn[any](done)
+		out := fanIn[any](done)
 		_, open := <-out
 		assert.False(t, open, "expected output channel to be closed")
 	})
@@ -27,7 +27,7 @@ func TestFanIn(t *testing.T) {
 		ch2 := make(chan string)
 		done := make(chan struct{})
 
-		out := FanIn(done, ch1, ch2)
+		out := fanIn(done, ch1, ch2)
 
 		assert.Equal(t, "test", <-out, "expected 'test'")
 
@@ -46,7 +46,7 @@ func TestFanIn(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		out := FanIn[string](done, ch)
+		out := fanIn[string](done, ch)
 		assert.Equal(t, "test", <-out, "expected 'test'")
 	})
 
@@ -63,7 +63,7 @@ func TestFanIn(t *testing.T) {
 		done := make(chan struct{})
 		defer close(done)
 
-		out := FanIn(done, channels...)
+		out := fanIn(done, channels...)
 		assert.Equal(t, "test", <-out, "expected 'test'")
 	})
 }
@@ -75,7 +75,7 @@ func TestTee(t *testing.T) {
 		defer cancel()
 
 		in := make(chan int)
-		out1, out2 := Tee(ctx, in, &wg)
+		out1, out2 := tee(ctx, in, &wg)
 
 		go func() {
 			in <- 1

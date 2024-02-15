@@ -7,50 +7,50 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type MockFactory[T any] struct {
+type mockFactory[T any] struct {
 	mock.Mock
 }
 
-func (m *MockFactory[T]) New() T {
+func (m *mockFactory[T]) New() T {
 	args := m.Called()
 	return args.Get(0).(T)
 }
 
-func (m *MockFactory[T]) Reset(item T) {
+func (m *mockFactory[T]) Reset(item T) {
 	m.Called(item)
 }
 
 func TestNewPool(t *testing.T) {
-	var mockFactory MockFactory[int]
+	var mockFactory mockFactory[int]
 	mockFactory.On("New").Return(0)
 
-	pool := NewPool[int](&mockFactory)
+	pool := newPool[int](&mockFactory)
 
 	assert.NotNil(t, pool, "pool should not be nil")
-	assert.IsType(t, &Pool[int]{}, pool, "pool should be of type *Pool[int]")
+	assert.IsType(t, &abstractPool[int]{}, pool, "pool should be of type *Pool[int]")
 }
 
 func TestPoolOperations(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
-		var mockFactory MockFactory[int]
+		var mockFactory mockFactory[int]
 		mockFactory.On("New").Return(0)
 
-		pool := NewPool[int](&mockFactory)
-		item := pool.Get()
+		pool := newPool[int](&mockFactory)
+		item := pool.get()
 
 		assert.Equal(t, 0, item, "item should be 0")
 	})
 
 	t.Run("Put", func(t *testing.T) {
-		var mockFactory MockFactory[int]
+		var mockFactory mockFactory[int]
 		mockFactory.On("New").Return(0)
 		mockFactory.On("Reset", 0).Return()
 
-		pool := NewPool[int](&mockFactory)
-		item := pool.Get()
-		pool.Put(item)
+		pool := newPool[int](&mockFactory)
+		item := pool.get()
+		pool.put(item)
 
-		retrievedItem := pool.Get()
+		retrievedItem := pool.get()
 		assert.Equal(t, 0, retrievedItem, "retrievedItem should be 0")
 		mockFactory.AssertExpectations(t)
 	})

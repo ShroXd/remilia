@@ -9,32 +9,33 @@ import (
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-type FileSystemOperations interface {
+type fileSystemOperations interface {
 	MkdirAll(path string, perm os.FileMode) error
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 }
 
-type FileSystem struct{}
+type fileSystem struct{}
 
-func (fs FileSystem) MkdirAll(path string, perm os.FileMode) error {
+func (fs fileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
-func (fs FileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+func (fs fileSystem) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(name, flag, perm)
 }
 
-type HTTPClient interface {
-	Execute(request *Request) (*Response, error)
+type httpClient interface {
+	execute(request *Request) (*Response, error)
 }
 
 type Remilia struct {
 	ID   string
 	Name string
 
-	client     HTTPClient
+	client     httpClient
 	logger     Logger
 	urlMatcher func(s string) bool
 }
@@ -43,7 +44,7 @@ func New() (*Remilia, error) {
 	return newCurried(WithDefaultClient(), WithDefaultLogger())()
 }
 
-func newCurried(opts ...Option) func() (*Remilia, error) {
+func newCurried(opts ...remiliaOption) func() (*Remilia, error) {
 	return func() (*Remilia, error) {
 		r := &Remilia{}
 
@@ -52,15 +53,15 @@ func newCurried(opts ...Option) func() (*Remilia, error) {
 		}
 
 		if r.logger == nil {
-			logConfig := &LoggerConfig{
-				ID:           GetOrDefault(&r.ID, uuid.NewString()),
-				Name:         GetOrDefault(&r.Name, "defaultName"),
-				ConsoleLevel: DebugLevel,
-				FileLevel:    DebugLevel,
+			logConfig := &loggerConfig{
+				ID:           getOrDefault(&r.ID, uuid.NewString()),
+				Name:         getOrDefault(&r.Name, "defaultName"),
+				ConsoleLevel: debugLevel,
+				FileLevel:    debugLevel,
 			}
 
 			var err error
-			r.logger, err = createLogger(logConfig, &FileSystem{})
+			r.logger, err = createLogger(logConfig, &fileSystem{})
 			if err != nil {
 				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 			}
@@ -68,36 +69,38 @@ func newCurried(opts ...Option) func() (*Remilia, error) {
 
 		if r.client == nil {
 			internalClient := newFastHTTPClient()
-			client, err := NewClient(
-				WithInternalClient(internalClient),
-				WithDocumentCreator(&DefaultDocumentCreator{}),
-				WithClientLogger(r.logger),
+			client, err := newClient(
+				withInternalClient(internalClient),
+				withDocumentCreator(&defaultDocumentCreator{}),
+				withClientLogger(r.logger),
 			)
 			if err != nil {
 				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 			}
 			r.client = client
 		}
-		r.urlMatcher = URLMatcher()
+		r.urlMatcher = urlMatcher()
 		return r, nil
 	}
 }
 
-type Option func(*Remilia)
+type remiliaOption func(*Remilia)
 
-func WithClient(client HTTPClient) Option {
+func WithClient(client httpClient) remiliaOption {
 	return func(r *Remilia) {
 		r.client = client
 	}
 }
 
-func WithDefaultClient() Option {
+// TODO: export the option fns for the client
+func WithDefaultClient() remiliaOption {
 	return func(r *Remilia) {
 		internalClient := newFastHTTPClient()
-		client, err := NewClient(
-			WithInternalClient(internalClient),
-			WithDocumentCreator(&DefaultDocumentCreator{}),
-			WithClientLogger(r.logger),
+		client, err := newClient(
+			withInternalClient(internalClient),
+			withDocumentCreator(&defaultDocumentCreator{}),
+			withClientLogger(r.logger),
+			withTransformer(simplifiedchinese.GBK.NewDecoder()),
 		)
 		if err != nil {
 			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
@@ -106,23 +109,23 @@ func WithDefaultClient() Option {
 	}
 }
 
-func WithLogger(logger Logger) Option {
+func WithLogger(logger Logger) remiliaOption {
 	return func(r *Remilia) {
 		r.logger = logger
 	}
 }
 
-func WithDefaultLogger() Option {
+func WithDefaultLogger() remiliaOption {
 	return func(r *Remilia) {
-		logConfig := &LoggerConfig{
-			ID:           GetOrDefault(&r.ID, uuid.NewString()),
-			Name:         GetOrDefault(&r.Name, "defaultName"),
-			ConsoleLevel: DebugLevel,
-			FileLevel:    DebugLevel,
+		logConfig := &loggerConfig{
+			ID:           getOrDefault(&r.ID, uuid.NewString()),
+			Name:         getOrDefault(&r.Name, "defaultName"),
+			ConsoleLevel: debugLevel,
+			FileLevel:    debugLevel,
 		}
 
 		var err error
-		r.logger, err = createLogger(logConfig, &FileSystem{})
+		r.logger, err = createLogger(logConfig, &fileSystem{})
 		if err != nil {
 			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		}
@@ -142,7 +145,7 @@ func newFastHTTPClient() *fasthttp.Client {
 func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 		// TODO: we should put the response
-		req, err := NewRequest(WithURL(urlStr))
+		req, err := newRequest(withURL(urlStr))
 		if err != nil {
 			return err
 		}
@@ -151,19 +154,19 @@ func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put
 	}
 }
 
-func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])) StageFunc[*Request] {
+func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])) stageFunc[*Request] {
 	return func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
 		wrappedPut := func(in string) {
 			if !r.urlMatcher(in) {
-				r.logger.Error("Failed to match url", LogContext{
+				r.logger.Error("Failed to match url", logContext{
 					"url": in,
 				})
 				return
 			}
 
-			req, err := NewRequest(WithURL(in))
+			req, err := newRequest(withURL(in))
 			if err != nil {
-				r.logger.Error("Failed to create request", LogContext{
+				r.logger.Error("Failed to create request", logContext{
 					"err": err,
 				})
 				return
@@ -181,7 +184,7 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])
 					case <-done:
 						return
 					default:
-						resp, err := r.client.Execute(req)
+						resp, err := r.client.execute(req)
 						if err != nil {
 							continue
 						}
@@ -201,7 +204,7 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])
 			workers = append(workers, worker(done, inCh))
 		}
 
-		mergedResponses := FanIn(done, workers...)
+		mergedResponses := fanIn(done, workers...)
 
 		for resp := range mergedResponses {
 			fn(resp.document, wrappedPut)
@@ -211,15 +214,15 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])
 	}
 }
 
-func (r *Remilia) Just(urlStr string) ProcessorDef[*Request] {
-	return NewProcessor[*Request](r.justWrappedFunc(urlStr))
+func (r *Remilia) Just(urlStr string) processorDef[*Request] {
+	return newProcessor[*Request](r.justWrappedFunc(urlStr))
 }
 
-func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string])) StageDef[*Request] {
-	return NewStage[*Request](r.unitWrappedFunc(fn))
+func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string])) stageDef[*Request] {
+	return newStage[*Request](r.unitWrappedFunc(fn))
 }
 
-func (r *Remilia) Do(producerDef ProcessorDef[*Request], stageDefs ...StageDef[*Request]) error {
+func (r *Remilia) Do(producerDef processorDef[*Request], stageDefs ...stageDef[*Request]) error {
 	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)
 	if err != nil {
 		return err

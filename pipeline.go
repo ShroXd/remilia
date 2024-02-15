@@ -9,7 +9,7 @@ type pipeline[T any] struct {
 	stages   []*stage[T]
 }
 
-func newPipeline[T any](producerDef ProcessorDef[T], stageDefs ...StageDef[T]) (*pipeline[T], error) {
+func newPipeline[T any](producerDef processorDef[T], stageDefs ...stageDef[T]) (*pipeline[T], error) {
 	p := &pipeline[T]{}
 	var err error
 

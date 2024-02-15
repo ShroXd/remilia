@@ -42,7 +42,7 @@ func BenchmarkFanIn(b *testing.B) {
 
 				b.StartTimer()
 
-				out := FanIn(done, ch1, ch2, ch3)
+				out := fanIn(done, ch1, ch2, ch3)
 
 				for range out {
 				}
