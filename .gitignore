@@ -27,5 +27,6 @@ logs/
 out/
 
 fiction/
+example/
 
 .idea/
