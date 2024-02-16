@@ -74,7 +74,7 @@ func BenchmarkPipelineExecution(b *testing.B) {
 					val, _ := get()
 					put(val * 2)
 					return nil
-				}, withConcurrency(uint(tc.concurrency)))
+				}, WithConcurrency(uint(tc.concurrency)))
 
 				pipeline, _ := newPipeline[int](generator, processor)
 				pipeline.execute()

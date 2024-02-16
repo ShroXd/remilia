@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
-	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 type fileSystemOperations interface {
@@ -35,88 +34,18 @@ type Remilia struct {
 	ID   string
 	Name string
 
-	client     httpClient
-	logger     Logger
-	urlMatcher func(s string) bool
+	client       httpClient
+	logger       Logger
+	urlMatcher   func(s string) bool
+	stageOptions []stageOptionFunc
 }
 
-func New() (*Remilia, error) {
-	return newCurried(WithDefaultClient(), WithDefaultLogger())()
-}
+func New(opts ...remiliaOption) (*Remilia, error) {
+	r := &Remilia{}
 
-func newCurried(opts ...remiliaOption) func() (*Remilia, error) {
-	return func() (*Remilia, error) {
-		r := &Remilia{}
+	WithClientOptions()(r)
 
-		for _, opt := range opts {
-			opt(r)
-		}
-
-		if r.logger == nil {
-			logConfig := &loggerConfig{
-				ID:           getOrDefault(&r.ID, uuid.NewString()),
-				Name:         getOrDefault(&r.Name, "defaultName"),
-				ConsoleLevel: debugLevel,
-				FileLevel:    debugLevel,
-			}
-
-			var err error
-			r.logger, err = createLogger(logConfig, &fileSystem{})
-			if err != nil {
-				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
-			}
-		}
-
-		if r.client == nil {
-			internalClient := newFastHTTPClient()
-			client, err := newClient(
-				withInternalClient(internalClient),
-				withDocumentCreator(&defaultDocumentCreator{}),
-				withClientLogger(r.logger),
-			)
-			if err != nil {
-				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
-			}
-			r.client = client
-		}
-		r.urlMatcher = urlMatcher()
-		return r, nil
-	}
-}
-
-type remiliaOption func(*Remilia)
-
-func WithClient(client httpClient) remiliaOption {
-	return func(r *Remilia) {
-		r.client = client
-	}
-}
-
-// TODO: export the option fns for the client
-func WithDefaultClient() remiliaOption {
-	return func(r *Remilia) {
-		internalClient := newFastHTTPClient()
-		client, err := newClient(
-			withInternalClient(internalClient),
-			withDocumentCreator(&defaultDocumentCreator{}),
-			withClientLogger(r.logger),
-			withTransformer(simplifiedchinese.GBK.NewDecoder()),
-		)
-		if err != nil {
-			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
-		}
-		r.client = client
-	}
-}
-
-func WithLogger(logger Logger) remiliaOption {
-	return func(r *Remilia) {
-		r.logger = logger
-	}
-}
-
-func WithDefaultLogger() remiliaOption {
-	return func(r *Remilia) {
+	if r.logger == nil {
 		logConfig := &loggerConfig{
 			ID:           getOrDefault(&r.ID, uuid.NewString()),
 			Name:         getOrDefault(&r.Name, "defaultName"),
@@ -130,16 +59,13 @@ func WithDefaultLogger() remiliaOption {
 			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		}
 	}
-}
+	r.urlMatcher = urlMatcher()
 
-func newFastHTTPClient() *fasthttp.Client {
-	return &fasthttp.Client{
-		ReadTimeout:              10 * time.Second,
-		WriteTimeout:             10 * time.Second,
-		NoDefaultUserAgentHeader: true,
-		// TODO: figure out how to set timeout for TCP connection
-		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+	for _, opt := range opts {
+		opt(r)
 	}
+
+	return r, nil
 }
 
 func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
@@ -218,8 +144,11 @@ func (r *Remilia) Just(urlStr string) processorDef[*Request] {
 	return newProcessor[*Request](r.justWrappedFunc(urlStr))
 }
 
-func (r *Remilia) Unit(fn func(in *goquery.Document, put Put[string])) stageDef[*Request] {
-	return newStage[*Request](r.unitWrappedFunc(fn))
+type UnitFunc func(in *goquery.Document, put Put[string])
+
+func (r *Remilia) Unit(fn UnitFunc, opts ...stageOptionFunc) stageDef[*Request] {
+	combinedOpts := append(r.stageOptions, opts...)
+	return newStage[*Request](r.unitWrappedFunc(fn), combinedOpts...)
 }
 
 func (r *Remilia) Do(producerDef processorDef[*Request], stageDefs ...stageDef[*Request]) error {
@@ -229,4 +158,57 @@ func (r *Remilia) Do(producerDef processorDef[*Request], stageDefs ...stageDef[*
 	}
 
 	return pipeline.execute()
+}
+
+func newFastHTTPClient() *fasthttp.Client {
+	return &fasthttp.Client{
+		ReadTimeout:              10 * time.Second,
+		WriteTimeout:             10 * time.Second,
+		NoDefaultUserAgentHeader: true,
+		// TODO: figure out how to set timeout for TCP connection
+		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+	}
+}
+
+type remiliaOption func(*Remilia)
+
+func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
+	return func(r *Remilia) {
+		internalClient := newFastHTTPClient()
+		client, err := newClient(
+			withInternalClient(internalClient),
+			withDocumentCreator(&defaultDocumentCreator{}),
+			withClientLogger(r.logger),
+		)
+		if err != nil {
+			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+		}
+
+		for _, opt := range opts {
+			if err := opt(client); err != nil {
+				log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+			}
+		}
+
+		r.client = client
+	}
+}
+
+func WithBackoffOptions(opts ...exponentialBackoffOptionFunc) remiliaOption {
+	return func(r *Remilia) {
+		// TODO: design better way to configure the backoff algorithm
+		withBackoffPoolOptions(opts...)(r.client.(*backendClient))
+	}
+}
+
+func WithStageOptions(opts ...stageOptionFunc) remiliaOption {
+	return func(r *Remilia) {
+		r.stageOptions = opts
+	}
+}
+
+func WithLogger(logger Logger) remiliaOption {
+	return func(r *Remilia) {
+		r.logger = logger
+	}
 }

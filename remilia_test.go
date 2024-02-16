@@ -23,9 +23,9 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, instance.urlMatcher, "New() should return an instance with a non-nil urlMatcher")
 }
 
-func TestNewCurried(t *testing.T) {
+func TestNewRemilia(t *testing.T) {
 	t.Run("With default client and logger", func(t *testing.T) {
-		instance, err := newCurried(WithDefaultClient(), WithDefaultLogger())()
+		instance, err := New()
 
 		assert.NoError(t, err, "newCurried() should not return an error")
 		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")
@@ -35,7 +35,7 @@ func TestNewCurried(t *testing.T) {
 	})
 
 	t.Run("Without client", func(t *testing.T) {
-		instance, err := newCurried(WithDefaultLogger())()
+		instance, err := New()
 
 		assert.NoError(t, err, "newCurried() should not return an error")
 		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")
@@ -45,7 +45,7 @@ func TestNewCurried(t *testing.T) {
 	})
 
 	t.Run("Without logger", func(t *testing.T) {
-		instance, err := newCurried(WithDefaultClient())()
+		instance, err := New()
 
 		assert.NoError(t, err, "newCurried() should not return an error")
 		assert.NotNil(t, instance, "newCurried() should return a non-nil instance")

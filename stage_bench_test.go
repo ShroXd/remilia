@@ -47,9 +47,9 @@ func BenchmarkProcessorExecution(b *testing.B) {
 				put(item * 2)
 				return nil
 			}
-			opts := []stageOptionFn{
-				withConcurrency(uint(tc.concurrency)),
-				withInputBufferSize(uint(tc.bufferSize)),
+			opts := []stageOptionFunc{
+				WithConcurrency(uint(tc.concurrency)),
+				WithInputBufferSize(uint(tc.bufferSize)),
 			}
 			processor, _ := newProcessor[int](workFn, opts...)()
 

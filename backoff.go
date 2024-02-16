@@ -67,50 +67,6 @@ func newExponentialBackoff(optFns ...exponentialBackoffOptionFunc) *exponentialB
 	return eb
 }
 
-type exponentialBackoffOptionFunc optionFunc[*exponentialBackoff]
-
-func withMinDelay(d time.Duration) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.minDelay = d
-		return nil
-	}
-}
-
-func withMaxDelay(d time.Duration) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.maxDelay = d
-		return nil
-	}
-}
-
-func withMultiplier(m float64) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.multiplier = m
-		return nil
-	}
-}
-
-func withRandomImp(r randomWrapper) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.random = r
-		return nil
-	}
-}
-
-func withMaxAttempt(a uint8) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.maxAttempt = a
-		return nil
-	}
-}
-
-func withLinearAttempt(a uint8) exponentialBackoffOptionFunc {
-	return func(eb *exponentialBackoff) error {
-		eb.linearAttempt = a
-		return nil
-	}
-}
-
 func (eb *exponentialBackoff) Reset() {
 	eb.attempt = 0
 }
@@ -128,6 +84,50 @@ func (eb *exponentialBackoff) GetMaxAttempt() uint8 {
 
 func (eb *exponentialBackoff) GetCurrentAttempt() uint8 {
 	return eb.attempt
+}
+
+type exponentialBackoffOptionFunc optionFunc[*exponentialBackoff]
+
+func withRandomImp(r randomWrapper) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.random = r
+		return nil
+	}
+}
+
+func WithMinDelay(d time.Duration) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.minDelay = d
+		return nil
+	}
+}
+
+func WithMaxDelay(d time.Duration) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.maxDelay = d
+		return nil
+	}
+}
+
+func WithMultiplier(m float64) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.multiplier = m
+		return nil
+	}
+}
+
+func WithMaxAttempt(a uint8) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.maxAttempt = a
+		return nil
+	}
+}
+
+func WithLinearAttempt(a uint8) exponentialBackoffOptionFunc {
+	return func(eb *exponentialBackoff) error {
+		eb.linearAttempt = a
+		return nil
+	}
 }
 
 type jitterBackoff func(attempt uint8) time.Duration

@@ -11,9 +11,9 @@ type stageOptions struct {
 	inputBufferSize uint
 }
 
-type stageOptionFn optionFunc[*stageOptions]
+type stageOptionFunc optionFunc[*stageOptions]
 
-func buildStageOptions(optFns []stageOptionFn) (*stageOptions, error) {
+func buildStageOptions(optFns []stageOptionFunc) (*stageOptions, error) {
 	so := &stageOptions{
 		concurrency: uint(1),
 	}
@@ -25,14 +25,14 @@ func buildStageOptions(optFns []stageOptionFn) (*stageOptions, error) {
 	return so, nil
 }
 
-func withName(name string) stageOptionFn {
+func withName(name string) stageOptionFunc {
 	return func(so *stageOptions) error {
 		so.name = name
 		return nil
 	}
 }
 
-func withConcurrency(concurrency uint) stageOptionFn {
+func WithConcurrency(concurrency uint) stageOptionFunc {
 	return func(so *stageOptions) error {
 		if concurrency == 0 {
 			return errInvalidConcurrency
@@ -42,7 +42,7 @@ func withConcurrency(concurrency uint) stageOptionFn {
 	}
 }
 
-func withInputBufferSize(size uint) stageOptionFn {
+func WithInputBufferSize(size uint) stageOptionFunc {
 	return func(so *stageOptions) error {
 		if size == 0 {
 			return errInvalidInputBufferSize
@@ -120,7 +120,7 @@ func buildProcessor[T any](fn workFn[T], opts *stageOptions) *processor[T] {
 	return p
 }
 
-func newProcessor[T any](fn workFn[T], optFns ...stageOptionFn) processorDef[T] {
+func newProcessor[T any](fn workFn[T], optFns ...stageOptionFunc) processorDef[T] {
 	return func() (*processor[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
@@ -163,7 +163,7 @@ func buildFlow[T any](fn flowFn[T], opts *stageOptions) *flow[T] {
 	}
 }
 
-func newFlow[T any](fn flowFn[T], optFns ...stageOptionFn) flowDef[T] {
+func newFlow[T any](fn flowFn[T], optFns ...stageOptionFunc) flowDef[T] {
 	return func() (*flow[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {
@@ -210,7 +210,7 @@ type stage[T any] struct {
 	get func() (T, bool)
 }
 
-func newStage[T any](fn stageFunc[T], optFns ...stageOptionFn) stageDef[T] {
+func newStage[T any](fn stageFunc[T], optFns ...stageOptionFunc) stageDef[T] {
 	return func() (*stage[T], error) {
 		opts, err := buildStageOptions(optFns)
 		if err != nil {

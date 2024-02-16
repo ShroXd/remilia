@@ -10,9 +10,9 @@ import (
 
 func TestStageOptions(t *testing.T) {
 	t.Run("Successful build with valid options", func(t *testing.T) {
-		so, err := buildStageOptions([]stageOptionFn{
+		so, err := buildStageOptions([]stageOptionFunc{
 			withName("test"),
-			withInputBufferSize(1),
+			WithInputBufferSize(1),
 		})
 
 		assert.NoError(t, err, "buildStageOptions should not return error")
@@ -21,9 +21,9 @@ func TestStageOptions(t *testing.T) {
 	})
 
 	t.Run("Failed build with invalid options", func(t *testing.T) {
-		so, err := buildStageOptions([]stageOptionFn{
+		so, err := buildStageOptions([]stageOptionFunc{
 			withName("test"),
-			withInputBufferSize(0),
+			WithInputBufferSize(0),
 		})
 
 		assert.Error(t, err, "buildStageOptions should return error")
@@ -84,7 +84,7 @@ func TestProcessor(t *testing.T) {
 			return nil
 		}
 
-		processor, err := newProcessor[int](workFn, withName("test"), withConcurrency(10), withInputBufferSize(1))()
+		processor, err := newProcessor[int](workFn, withName("test"), WithConcurrency(10), WithInputBufferSize(1))()
 		assert.NoError(t, err, "NewProcessor should not return error")
 		assert.Equal(t, "test", processor.opts.name, "Name should be test")
 		assert.Equal(t, uint(10), processor.opts.concurrency, "Concurrency should be 10")
@@ -97,7 +97,7 @@ func TestProcessor(t *testing.T) {
 		}
 
 		t.Run("Invalid concurrency", func(t *testing.T) {
-			processor, err := newProcessor[int](workFn, withName("test"), withConcurrency(0))()
+			processor, err := newProcessor[int](workFn, withName("test"), WithConcurrency(0))()
 
 			assert.Error(t, err, "NewProcessor should return error")
 			assert.Equal(t, errInvalidConcurrency, err, "Error should be ErrInvalidConcurrency")
@@ -105,7 +105,7 @@ func TestProcessor(t *testing.T) {
 		})
 
 		t.Run("Invalid input buffer size", func(t *testing.T) {
-			processor, err := newProcessor[int](workFn, withName("test"), withInputBufferSize(0))()
+			processor, err := newProcessor[int](workFn, withName("test"), WithInputBufferSize(0))()
 
 			assert.Error(t, err, "NewProcessor should return error")
 			assert.Equal(t, errInvalidInputBufferSize, err, "Error should be ErrInvalidInputBufferSize")
@@ -124,7 +124,7 @@ func TestProcessor(t *testing.T) {
 			return nil
 		}
 
-		processor, _ := newProcessor[int](workFn, withInputBufferSize(1))()
+		processor, _ := newProcessor[int](workFn, WithInputBufferSize(1))()
 		receiver := &commonStage[int]{
 			opts: &stageOptions{
 				concurrency: uint(1),
@@ -178,7 +178,7 @@ func TestProcessor(t *testing.T) {
 			return nil
 		}
 
-		processor, _ := newProcessor[int](workFn, withInputBufferSize(2))()
+		processor, _ := newProcessor[int](workFn, WithInputBufferSize(2))()
 		receiver := &commonStage[int]{
 			opts: &stageOptions{
 				concurrency: uint(1),
@@ -224,7 +224,7 @@ func TestFlow(t *testing.T) {
 			return in * 2, nil
 		}
 
-		flow, err := newFlow(flowFn, withName("test"), withInputBufferSize(1))()
+		flow, err := newFlow(flowFn, withName("test"), WithInputBufferSize(1))()
 		assert.NoError(t, err, "NewFlow should not return error")
 		assert.Equal(t, "test", flow.opts.name, "Name should be test")
 		assert.Equal(t, uint(1), flow.opts.inputBufferSize, "InputBufferSize should be 1")
@@ -235,7 +235,7 @@ func TestFlow(t *testing.T) {
 			return in * 2, nil
 		}
 
-		flow, err := newFlow(flowFn, withName("test"), withInputBufferSize(0))()
+		flow, err := newFlow(flowFn, withName("test"), WithInputBufferSize(0))()
 		assert.Error(t, err, "NewFlow should return error")
 		assert.Nil(t, flow, "Flow should be nil")
 	})
@@ -246,7 +246,7 @@ func TestFlow(t *testing.T) {
 				return in * 2, nil
 			}
 
-			flow, _ := newFlow[int](fn, withInputBufferSize(1))()
+			flow, _ := newFlow[int](fn, WithInputBufferSize(1))()
 			receiver := &commonStage[int]{
 				opts: &stageOptions{
 					concurrency: uint(1),
@@ -283,7 +283,7 @@ func TestFlow(t *testing.T) {
 				return 0, errors.New("test")
 			}
 
-			flow, _ := newFlow[int](fn, withInputBufferSize(1))()
+			flow, _ := newFlow[int](fn, WithInputBufferSize(1))()
 			receiver := &commonStage[int]{
 				opts: &stageOptions{
 					concurrency: uint(1),
@@ -320,7 +320,7 @@ func TestFlow(t *testing.T) {
 				return in * 2, nil
 			}
 
-			flow, _ := newFlow[int](fn, withInputBufferSize(1))()
+			flow, _ := newFlow[int](fn, WithInputBufferSize(1))()
 			receiver := &commonStage[int]{
 				opts: &stageOptions{
 					concurrency: uint(1),

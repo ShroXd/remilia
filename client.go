@@ -10,7 +10,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/valyala/fasthttp"
-	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
 
@@ -61,23 +60,21 @@ type backendClient struct {
 
 	internal    internalClient
 	docCreator  documentCreator
-	backoffPool *abstractPool[*exponentialBackoff]
 	readerPool  *abstractPool[*bytes.Reader]
+	backoffPool *abstractPool[*exponentialBackoff]
 }
 
 func newClient(opts ...clientOptionFunc) (*backendClient, error) {
 	c := &backendClient{
 		backoffPool: newPool[*exponentialBackoff](newExponentialBackoffFactory(
-			withMinDelay(1*time.Second),
-			withMaxDelay(10*time.Second),
-			withMultiplier(2.0),
+			WithMinDelay(1*time.Second),
+			WithMaxDelay(10*time.Second),
+			WithMultiplier(2.0),
 		)),
 		readerPool: newPool[*bytes.Reader](readerFactory{}),
 	}
-
 	c.header = http.Header{}
-	// TODO: pass from root level
-	c.transformer = simplifiedchinese.GBK.NewDecoder()
+
 	for _, optFn := range opts {
 		if err := optFn(c); err != nil {
 			return nil, err
@@ -85,108 +82,6 @@ func newClient(opts ...clientOptionFunc) (*backendClient, error) {
 	}
 
 	return c, nil
-}
-
-func withBaseURL(url string) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.baseURL = url
-		return nil
-	}
-}
-
-func withHeaders(headers map[string]string) clientOptionFunc {
-	return func(c *backendClient) error {
-		for h, v := range headers {
-			c.header.Set(h, v)
-		}
-		return nil
-	}
-}
-
-func withTimeout(timeout time.Duration) clientOptionFunc {
-	return func(c *backendClient) error {
-		if timeout < 0 {
-			return errInvalidTimeout
-		}
-		c.timeout = timeout
-		return nil
-	}
-}
-
-func withClientLogger(logger Logger) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.logger = logger
-		return nil
-	}
-}
-
-func withPreRequestHooks(hooks ...requestHook) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.udPreRequestHooksLock.Lock()
-		defer c.udPreRequestHooksLock.Unlock()
-
-		c.udPreRequestHooks = append(c.udPreRequestHooks, hooks...)
-		return nil
-	}
-}
-
-func withPostResponseHooks(hooks ...responseHook) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.udPostResponseHooksLock.Lock()
-		defer c.udPostResponseHooksLock.Unlock()
-
-		c.udPostResponseHooks = append(c.udPostResponseHooks, hooks...)
-		return nil
-	}
-}
-
-func withInternalPreRequestHooks(hooks ...requestHook) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.preRequestHooks = append(c.preRequestHooks, hooks...)
-		return nil
-	}
-}
-
-func withInternalPostResponseHooks(hooks ...responseHook) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.postResponseHooks = append(c.postResponseHooks, hooks...)
-		return nil
-	}
-}
-
-func withInternalClient(client internalClient) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.internal = client
-		return nil
-	}
-}
-
-func withDocumentCreator(creator documentCreator) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.docCreator = creator
-		return nil
-	}
-}
-
-func withBackoffPool(backoffPool *abstractPool[*exponentialBackoff]) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.backoffPool = backoffPool
-		return nil
-	}
-}
-
-func withReaderPool(readerPool *abstractPool[*bytes.Reader]) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.readerPool = readerPool
-		return nil
-	}
-}
-
-func withTransformer(transformer transform.Transformer) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.transformer = transformer
-		return nil
-	}
 }
 
 func (c *backendClient) execute(request *Request) (*Response, error) {
@@ -233,8 +128,14 @@ func (c *backendClient) execute(request *Request) (*Response, error) {
 
 	reader := c.readerPool.get()
 	reader.Reset(resp.Body())
-	transformer := transform.NewReader(reader, c.transformer)
-	doc, err := c.docCreator.NewDocumentFromReader(transformer)
+
+	var doc *goquery.Document
+	if c.transformer != nil {
+		transformer := transform.NewReader(reader, c.transformer)
+		doc, err = c.docCreator.NewDocumentFromReader(transformer)
+	} else {
+		doc, err = c.docCreator.NewDocumentFromReader(reader)
+	}
 	c.readerPool.put(reader)
 	if err != nil {
 		c.logger.Error("Failed to build goquery document", logContext{
@@ -260,4 +161,113 @@ func (c *backendClient) execute(request *Request) (*Response, error) {
 	}
 
 	return response, nil
+}
+
+func withClientLogger(logger Logger) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.logger = logger
+		return nil
+	}
+}
+
+func withInternalPreRequestHooks(hooks ...requestHook) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.preRequestHooks = append(c.preRequestHooks, hooks...)
+		return nil
+	}
+}
+
+func withInternalPostResponseHooks(hooks ...responseHook) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.postResponseHooks = append(c.postResponseHooks, hooks...)
+		return nil
+	}
+}
+
+func withInternalClient(client internalClient) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.internal = client
+		return nil
+	}
+}
+
+func withDocumentCreator(creator documentCreator) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.docCreator = creator
+		return nil
+	}
+}
+
+func withBackoffPool(backoffPool *abstractPool[*exponentialBackoff]) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.backoffPool = backoffPool
+		return nil
+	}
+}
+
+func withReaderPool(readerPool *abstractPool[*bytes.Reader]) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.readerPool = readerPool
+		return nil
+	}
+}
+
+func withBackoffPoolOptions(opts ...exponentialBackoffOptionFunc) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.backoffPool = newPool[*exponentialBackoff](newExponentialBackoffFactory(opts...))
+		return nil
+	}
+}
+
+func WithTransformer(transformer transform.Transformer) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.transformer = transformer
+		return nil
+	}
+}
+
+func WithPreRequestHooks(hooks ...requestHook) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.udPreRequestHooksLock.Lock()
+		defer c.udPreRequestHooksLock.Unlock()
+
+		c.udPreRequestHooks = append(c.udPreRequestHooks, hooks...)
+		return nil
+	}
+}
+
+func WithPostResponseHooks(hooks ...responseHook) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.udPostResponseHooksLock.Lock()
+		defer c.udPostResponseHooksLock.Unlock()
+
+		c.udPostResponseHooks = append(c.udPostResponseHooks, hooks...)
+		return nil
+	}
+}
+
+func WithBaseURL(url string) clientOptionFunc {
+	return func(c *backendClient) error {
+		c.baseURL = url
+		return nil
+	}
+}
+
+func WithHeaders(headers map[string]string) clientOptionFunc {
+	return func(c *backendClient) error {
+		for h, v := range headers {
+			c.header.Set(h, v)
+		}
+		return nil
+	}
+}
+
+func WithTimeout(timeout time.Duration) clientOptionFunc {
+	return func(c *backendClient) error {
+		if timeout < 0 {
+			return errInvalidTimeout
+		}
+		c.timeout = timeout
+		return nil
+	}
 }

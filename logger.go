@@ -120,6 +120,7 @@ func getLogFileName(c *loggerConfig) string {
 	return fmt.Sprintf("%s_%s_%s.log", c.ID, c.Name, time.Now().Format(timeFormat))
 }
 
+// TODO: refactor to functional options so that user can set the log path etc..
 func createLogger(c *loggerConfig, fs fileSystemOperations) (*defaultLogger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
