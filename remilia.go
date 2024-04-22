@@ -43,8 +43,6 @@ type Remilia struct {
 func New(opts ...remiliaOption) (*Remilia, error) {
 	r := &Remilia{}
 
-	WithClientOptions()(r)
-
 	if r.logger == nil {
 		logConfig := &loggerConfig{
 			ID:           getOrDefault(&r.ID, uuid.NewString()),
@@ -59,6 +57,18 @@ func New(opts ...remiliaOption) (*Remilia, error) {
 			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
 		}
 	}
+
+	internalClient := newFastHTTPClient()
+	client, err := newClient(
+		withInternalClient(internalClient),
+		withDocumentCreator(&defaultDocumentCreator{}),
+		withClientLogger(r.logger),
+	)
+	if err != nil {
+		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+	}
+	r.client = client
+
 	r.urlMatcher = urlMatcher()
 
 	for _, opt := range opts {
@@ -146,7 +156,9 @@ func (r *Remilia) Just(urlStr string) processorDef[*Request] {
 
 type UnitFunc func(in *goquery.Document, put Put[string])
 
-func (r *Remilia) Unit(fn UnitFunc, opts ...stageOptionFunc) stageDef[*Request] {
+type unitOptionFunc = stageOptionFunc
+
+func (r *Remilia) Unit(fn UnitFunc, opts ...unitOptionFunc) stageDef[*Request] {
 	combinedOpts := append(r.stageOptions, opts...)
 	return newStage[*Request](r.unitWrappedFunc(fn), combinedOpts...)
 }
@@ -194,14 +206,7 @@ func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
 	}
 }
 
-func WithBackoffOptions(opts ...exponentialBackoffOptionFunc) remiliaOption {
-	return func(r *Remilia) {
-		// TODO: design better way to configure the backoff algorithm
-		withBackoffPoolOptions(opts...)(r.client.(*backendClient))
-	}
-}
-
-func WithStageOptions(opts ...stageOptionFunc) remiliaOption {
+func WithUnitOptions(opts ...unitOptionFunc) remiliaOption {
 	return func(r *Remilia) {
 		r.stageOptions = opts
 	}

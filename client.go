@@ -38,39 +38,36 @@ func (f readerFactory) Reset(r *bytes.Reader) {
 }
 
 type (
-	requestHook  func(*backendClient, *Request) error
-	responseHook func(*backendClient, *Response) error
+	RequestHook  func(*Client, *Request) error
+	ResponseHook func(*Client, *Response) error
 )
 
 // TODO: is this a good preactice to mixin otps for network request and custom functionality?
-type clientOptionFunc optionFunc[*backendClient]
+type clientOptionFunc optionFunc[*Client]
 
-type backendClient struct {
+type Client struct {
 	baseURL                 string
 	header                  http.Header
 	timeout                 time.Duration
 	logger                  Logger
-	preRequestHooks         []requestHook
-	udPreRequestHooks       []requestHook
+	preRequestHooks         []RequestHook
+	udPreRequestHooks       []RequestHook
 	udPreRequestHooksLock   sync.RWMutex
-	postResponseHooks       []responseHook
-	udPostResponseHooks     []responseHook
+	postResponseHooks       []ResponseHook
+	udPostResponseHooks     []ResponseHook
 	udPostResponseHooksLock sync.RWMutex
 	transformer             transform.Transformer
 
-	internal    internalClient
-	docCreator  documentCreator
-	readerPool  *abstractPool[*bytes.Reader]
-	backoffPool *abstractPool[*exponentialBackoff]
+	internal   internalClient
+	docCreator documentCreator
+	readerPool *abstractPool[*bytes.Reader]
+
+	exponentialBackoff            *exponentialBackoff
+	exponentialBackoffOptionFuncs []exponentialBackoffOptionFunc
 }
 
-func newClient(opts ...clientOptionFunc) (*backendClient, error) {
-	c := &backendClient{
-		backoffPool: newPool[*exponentialBackoff](newExponentialBackoffFactory(
-			WithMinDelay(1*time.Second),
-			WithMaxDelay(10*time.Second),
-			WithMultiplier(2.0),
-		)),
+func newClient(opts ...clientOptionFunc) (*Client, error) {
+	c := &Client{
 		readerPool: newPool[*bytes.Reader](readerFactory{}),
 	}
 	c.header = http.Header{}
@@ -81,10 +78,12 @@ func newClient(opts ...clientOptionFunc) (*backendClient, error) {
 		}
 	}
 
+	c.exponentialBackoff = newExponentialBackoff(c.exponentialBackoffOptionFuncs...)
+
 	return c, nil
 }
 
-func (c *backendClient) execute(request *Request) (*Response, error) {
+func (c *Client) execute(request *Request) (*Response, error) {
 	c.udPreRequestHooksLock.RLock()
 	defer c.udPreRequestHooksLock.RUnlock()
 
@@ -108,12 +107,10 @@ func (c *backendClient) execute(request *Request) (*Response, error) {
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
 
-	backoff := c.backoffPool.get()
 	op := func() error {
 		return c.internal.Do(req, resp)
 	}
-	err := retry(context.TODO(), op, backoff)
-	c.backoffPool.put(backoff)
+	err := retry(context.TODO(), op, c.exponentialBackoff)
 
 	if err != nil {
 		c.logger.Error("Failed to execute request", logContext{
@@ -164,70 +161,56 @@ func (c *backendClient) execute(request *Request) (*Response, error) {
 }
 
 func withClientLogger(logger Logger) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.logger = logger
 		return nil
 	}
 }
 
-func withInternalPreRequestHooks(hooks ...requestHook) clientOptionFunc {
-	return func(c *backendClient) error {
+func withInternalPreRequestHooks(hooks ...RequestHook) clientOptionFunc {
+	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, hooks...)
 		return nil
 	}
 }
 
-func withInternalPostResponseHooks(hooks ...responseHook) clientOptionFunc {
-	return func(c *backendClient) error {
+func withInternalPostResponseHooks(hooks ...ResponseHook) clientOptionFunc {
+	return func(c *Client) error {
 		c.postResponseHooks = append(c.postResponseHooks, hooks...)
 		return nil
 	}
 }
 
 func withInternalClient(client internalClient) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.internal = client
 		return nil
 	}
 }
 
 func withDocumentCreator(creator documentCreator) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.docCreator = creator
 		return nil
 	}
 }
 
-func withBackoffPool(backoffPool *abstractPool[*exponentialBackoff]) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.backoffPool = backoffPool
-		return nil
-	}
-}
-
 func withReaderPool(readerPool *abstractPool[*bytes.Reader]) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.readerPool = readerPool
 		return nil
 	}
 }
 
-func withBackoffPoolOptions(opts ...exponentialBackoffOptionFunc) clientOptionFunc {
-	return func(c *backendClient) error {
-		c.backoffPool = newPool[*exponentialBackoff](newExponentialBackoffFactory(opts...))
-		return nil
-	}
-}
-
 func WithTransformer(transformer transform.Transformer) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.transformer = transformer
 		return nil
 	}
 }
 
-func WithPreRequestHooks(hooks ...requestHook) clientOptionFunc {
-	return func(c *backendClient) error {
+func WithPreRequestHooks(hooks ...RequestHook) clientOptionFunc {
+	return func(c *Client) error {
 		c.udPreRequestHooksLock.Lock()
 		defer c.udPreRequestHooksLock.Unlock()
 
@@ -236,8 +219,8 @@ func WithPreRequestHooks(hooks ...requestHook) clientOptionFunc {
 	}
 }
 
-func WithPostResponseHooks(hooks ...responseHook) clientOptionFunc {
-	return func(c *backendClient) error {
+func WithPostResponseHooks(hooks ...ResponseHook) clientOptionFunc {
+	return func(c *Client) error {
 		c.udPostResponseHooksLock.Lock()
 		defer c.udPostResponseHooksLock.Unlock()
 
@@ -247,14 +230,14 @@ func WithPostResponseHooks(hooks ...responseHook) clientOptionFunc {
 }
 
 func WithBaseURL(url string) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		c.baseURL = url
 		return nil
 	}
 }
 
 func WithHeaders(headers map[string]string) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		for h, v := range headers {
 			c.header.Set(h, v)
 		}
@@ -263,11 +246,48 @@ func WithHeaders(headers map[string]string) clientOptionFunc {
 }
 
 func WithTimeout(timeout time.Duration) clientOptionFunc {
-	return func(c *backendClient) error {
+	return func(c *Client) error {
 		if timeout < 0 {
 			return errInvalidTimeout
 		}
 		c.timeout = timeout
+		return nil
+	}
+}
+
+// Configuration functions for exponential backoff
+
+func WithRequestMinimumDelay(d time.Duration) clientOptionFunc {
+	return func(c *Client) error {
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMinDelay(d))
+		return nil
+	}
+}
+
+func WithRequestMaximumDelay(d time.Duration) clientOptionFunc {
+	return func(c *Client) error {
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMaxDelay(d))
+		return nil
+	}
+}
+
+func WithRequestMultiplier(m float64) clientOptionFunc {
+	return func(c *Client) error {
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMultiplier(m))
+		return nil
+	}
+}
+
+func WithRequestMaximumAttempt(a uint8) clientOptionFunc {
+	return func(c *Client) error {
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMaxAttempt(a))
+		return nil
+	}
+}
+
+func WithRequestLinearAttempt(a uint8) clientOptionFunc {
+	return func(c *Client) error {
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithLinearAttempt(a))
 		return nil
 	}
 }

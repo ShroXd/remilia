@@ -59,10 +59,10 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("Successfully run buildClientOptions with valid hooks", func(t *testing.T) {
-		mockPreRequestHook := func(client *backendClient, req *Request) error {
+		mockPreRequestHook := func(client *Client, req *Request) error {
 			return nil
 		}
-		mockPostRequestHook := func(client *backendClient, resp *Response) error {
+		mockPostRequestHook := func(client *Client, resp *Response) error {
 			return nil
 		}
 		client, err := newClient(
@@ -114,7 +114,7 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func setupClient(t *testing.T, hooks ...clientOptionFunc) (*backendClient, *mockInternalClient) {
+func setupClient(t *testing.T, hooks ...clientOptionFunc) (*Client, *mockInternalClient) {
 	httpClient := new(mockInternalClient)
 	opts := append(hooks, withInternalClient(httpClient), withDocumentCreator(&defaultDocumentCreator{}))
 	client, err := newClient(opts...)
@@ -122,7 +122,7 @@ func setupClient(t *testing.T, hooks ...clientOptionFunc) (*backendClient, *mock
 	return client, httpClient
 }
 
-func assertExecuteSuccess(t *testing.T, client *backendClient, httpClient *mockInternalClient, setupMock func(*mockInternalClient)) {
+func assertExecuteSuccess(t *testing.T, client *Client, httpClient *mockInternalClient, setupMock func(*mockInternalClient)) {
 	if setupMock != nil {
 		setupMock(httpClient)
 	}
@@ -136,7 +136,7 @@ func assertExecuteSuccess(t *testing.T, client *backendClient, httpClient *mockI
 	httpClient.AssertExpectations(t)
 }
 
-func assertExecuteFailure(t *testing.T, client *backendClient, httpClient *mockInternalClient, expectedError string, setupMock func(*mockInternalClient)) {
+func assertExecuteFailure(t *testing.T, client *Client, httpClient *mockInternalClient, expectedError string, setupMock func(*mockInternalClient)) {
 	if setupMock != nil {
 		setupMock(httpClient)
 	}
@@ -178,14 +178,7 @@ func TestExecute(t *testing.T) {
 
 		client, httpClient := setupClient(
 			t,
-			withClientLogger(logger),
-			withBackoffPool(newPool[*exponentialBackoff](
-				newExponentialBackoffFactory(
-					WithMinDelay(1*time.Nanosecond),
-					WithMaxDelay(10*time.Nanosecond),
-					WithMultiplier(2.0),
-					WithMaxAttempt(1),
-				))))
+			withClientLogger(logger))
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(errors.New("test network error"))
 
 		request := &Request{}
@@ -241,7 +234,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *backendClient, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -254,14 +247,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *backendClient, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *backendClient, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
@@ -273,7 +266,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *backendClient, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *mockInternalClient) {
@@ -282,7 +275,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with internal pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *backendClient, req *Request) error {
+		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *Client, req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -295,14 +288,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *backendClient, req *Request) error {
+		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *Client, req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with internal post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *backendClient, resp *Response) error {
+		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *Client, resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
@@ -314,7 +307,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *backendClient, resp *Response) error {
+		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *Client, resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *mockInternalClient) {
