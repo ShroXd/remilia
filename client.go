@@ -46,8 +46,10 @@ type (
 type clientOptionFunc optionFunc[*Client]
 
 type Client struct {
-	baseURL                 string
-	header                  http.Header
+	baseURL string
+	// TODO: consider if the header is still needed
+	header http.Header
+
 	timeout                 time.Duration
 	logger                  Logger
 	preRequestHooks         []RequestHook
@@ -251,6 +253,16 @@ func WithTimeout(timeout time.Duration) clientOptionFunc {
 			return errInvalidTimeout
 		}
 		c.timeout = timeout
+		return nil
+	}
+}
+
+func WithUserAgentGenerator(fn func() string) clientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(c *Client, r *Request) error {
+			r.Headers["User-Agent"] = fn()
+			return nil
+		})
 		return nil
 	}
 }

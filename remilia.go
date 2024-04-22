@@ -8,7 +8,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/fasthttpproxy"
 )
 
 type fileSystemOperations interface {
@@ -58,21 +57,24 @@ func New(opts ...remiliaOption) (*Remilia, error) {
 		}
 	}
 
-	internalClient := newFastHTTPClient()
-	client, err := newClient(
-		withInternalClient(internalClient),
-		withDocumentCreator(&defaultDocumentCreator{}),
-		withClientLogger(r.logger),
-	)
-	if err != nil {
-		log.Printf("Error: Failed to create instance of the struct due to: %v", err)
-	}
-	r.client = client
-
+	// TODO: should I move the url mather to client?
 	r.urlMatcher = urlMatcher()
 
 	for _, opt := range opts {
 		opt(r)
+	}
+
+	if r.client == nil {
+		client, err := newClient(
+			withInternalClient(newFastHTTPClient()),
+			withDocumentCreator(&defaultDocumentCreator{}),
+			withClientLogger(r.logger),
+		)
+		if err != nil {
+			log.Printf("Error: Failed to create instance of the struct due to: %v", err)
+		}
+
+		r.client = client
 	}
 
 	return r, nil
@@ -178,7 +180,7 @@ func newFastHTTPClient() *fasthttp.Client {
 		WriteTimeout:             10 * time.Second,
 		NoDefaultUserAgentHeader: true,
 		// TODO: figure out how to set timeout for TCP connection
-		Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:4780"),
+		// Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:8888"),
 	}
 }
 
@@ -186,9 +188,8 @@ type remiliaOption func(*Remilia)
 
 func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
 	return func(r *Remilia) {
-		internalClient := newFastHTTPClient()
 		client, err := newClient(
-			withInternalClient(internalClient),
+			withInternalClient(newFastHTTPClient()),
 			withDocumentCreator(&defaultDocumentCreator{}),
 			withClientLogger(r.logger),
 		)
