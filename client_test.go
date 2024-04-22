@@ -59,10 +59,10 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("Successfully run buildClientOptions with valid hooks", func(t *testing.T) {
-		mockPreRequestHook := func(client *Client, req *Request) error {
+		mockPreRequestHook := func(req *Request) error {
 			return nil
 		}
-		mockPostRequestHook := func(client *Client, resp *Response) error {
+		mockPostRequestHook := func(resp *Response) error {
 			return nil
 		}
 		client, err := newClient(
@@ -234,7 +234,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -247,14 +247,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, WithPreRequestHooks(func(req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
@@ -266,7 +266,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, WithPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, WithPostResponseHooks(func(resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *mockInternalClient) {
@@ -275,7 +275,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Successful execution with internal pre-request hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(req *Request) error {
 			req.Method = "GET"
 			return nil
 		}))
@@ -288,14 +288,14 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal pre-request hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(client *Client, req *Request) error {
+		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(req *Request) error {
 			return errors.New("pre-request error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "pre-request error", nil)
 	})
 
 	t.Run("Successful execution with internal post-response hooks", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(resp *Response) error {
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
@@ -307,7 +307,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("Failed execution due to internal post-response hooks returning error", func(t *testing.T) {
-		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(client *Client, resp *Response) error {
+		client, httpClient := setupClient(t, withInternalPostResponseHooks(func(resp *Response) error {
 			return errors.New("post-response error")
 		}))
 		assertExecuteFailure(t, client, httpClient, "post-response error", func(httpClient *mockInternalClient) {

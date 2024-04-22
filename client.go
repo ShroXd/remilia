@@ -38,8 +38,8 @@ func (f readerFactory) Reset(r *bytes.Reader) {
 }
 
 type (
-	RequestHook  func(*Client, *Request) error
-	ResponseHook func(*Client, *Response) error
+	RequestHook  func(*Request) error
+	ResponseHook func(*Response) error
 )
 
 // TODO: is this a good preactice to mixin otps for network request and custom functionality?
@@ -93,13 +93,13 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	defer c.udPostResponseHooksLock.RUnlock()
 
 	for _, fn := range c.preRequestHooks {
-		if err := fn(c, request); err != nil {
+		if err := fn(request); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, fn := range c.udPreRequestHooks {
-		if err := fn(c, request); err != nil {
+		if err := fn(request); err != nil {
 			return nil, err
 		}
 	}
@@ -148,13 +148,13 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	}
 
 	for _, fn := range c.postResponseHooks {
-		if err := fn(c, response); err != nil {
+		if err := fn(response); err != nil {
 			return nil, err
 		}
 	}
 
 	for _, fn := range c.udPostResponseHooks {
-		if err := fn(c, response); err != nil {
+		if err := fn(response); err != nil {
 			return nil, err
 		}
 	}
@@ -259,7 +259,7 @@ func WithTimeout(timeout time.Duration) clientOptionFunc {
 
 func WithUserAgentGenerator(fn func() string) clientOptionFunc {
 	return func(c *Client) error {
-		c.preRequestHooks = append(c.preRequestHooks, func(c *Client, r *Request) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
 			r.Headers["User-Agent"] = fn()
 			return nil
 		})
