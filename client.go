@@ -3,6 +3,7 @@ package remilia
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"sync"
@@ -300,6 +301,37 @@ func WithRequestMaximumAttempt(a uint8) clientOptionFunc {
 func WithRequestLinearAttempt(a uint8) clientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithLinearAttempt(a))
+		return nil
+	}
+}
+
+func WithBasicAuth(username string, password string) clientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
+			auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+			r.Headers["Authorization"] = "Basic " + auth
+			return nil
+		})
+		return nil
+	}
+}
+
+func WithBearerAuth(token string) clientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
+			r.Headers["Authorization"] = "Bearer " + token
+			return nil
+		})
+		return nil
+	}
+}
+
+func WithApiKeyAuth(apiKey string) clientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
+			r.Headers["apikey"] = apiKey
+			return nil
+		})
 		return nil
 	}
 }
