@@ -335,3 +335,13 @@ func WithApiKeyAuth(apiKey string) clientOptionFunc {
 		return nil
 	}
 }
+
+func WithCookie(cookie string) clientOptionFunc {
+	return func(c *Client) error {
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
+			r.Headers["Cookie"] = cookie
+			return nil
+		})
+		return nil
+	}
+}
