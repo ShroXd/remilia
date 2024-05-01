@@ -37,8 +37,8 @@ type exponentialBackoff struct {
 }
 
 var (
-	defaultMinDelay      = 100 * time.Millisecond
-	defaultMaxDelay      = 10 * time.Second
+	defaultMinDelay      = 1000 * time.Millisecond
+	defaultMaxDelay      = 50 * time.Second
 	defaultMultiplier    = 2.0
 	defaultMaxAttempt    = uint8(10)
 	defaultLinearAttempt = uint8(5)
@@ -95,35 +95,35 @@ func withRandomImp(r randomWrapper) exponentialBackoffOptionFunc {
 	}
 }
 
-func WithMinDelay(d time.Duration) exponentialBackoffOptionFunc {
+func WithWorkMinDelay(d time.Duration) exponentialBackoffOptionFunc {
 	return func(eb *exponentialBackoff) error {
 		eb.minDelay = d
 		return nil
 	}
 }
 
-func WithMaxDelay(d time.Duration) exponentialBackoffOptionFunc {
+func WithWorkMaxDelay(d time.Duration) exponentialBackoffOptionFunc {
 	return func(eb *exponentialBackoff) error {
 		eb.maxDelay = d
 		return nil
 	}
 }
 
-func WithMultiplier(m float64) exponentialBackoffOptionFunc {
+func WithWorkMultiplier(m float64) exponentialBackoffOptionFunc {
 	return func(eb *exponentialBackoff) error {
 		eb.multiplier = m
 		return nil
 	}
 }
 
-func WithMaxAttempt(a uint8) exponentialBackoffOptionFunc {
+func WithWorkMaxAttempt(a uint8) exponentialBackoffOptionFunc {
 	return func(eb *exponentialBackoff) error {
 		eb.maxAttempt = a
 		return nil
 	}
 }
 
-func WithLinearAttempt(a uint8) exponentialBackoffOptionFunc {
+func WithWorkLinearAttempt(a uint8) exponentialBackoffOptionFunc {
 	return func(eb *exponentialBackoff) error {
 		eb.linearAttempt = a
 		return nil
@@ -150,23 +150,23 @@ func fullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplie
 	}
 }
 
-type exponentialBackoffFactory struct {
-	opts []exponentialBackoffOptionFunc
-}
+// type exponentialBackoffFactory struct {
+// 	opts []exponentialBackoffOptionFunc
+// }
 
-func newExponentialBackoffFactory(opts ...exponentialBackoffOptionFunc) *exponentialBackoffFactory {
-	return &exponentialBackoffFactory{
-		opts: opts,
-	}
-}
+// func newExponentialBackoffFactory(opts ...exponentialBackoffOptionFunc) *exponentialBackoffFactory {
+// 	return &exponentialBackoffFactory{
+// 		opts: opts,
+// 	}
+// }
 
-func (f *exponentialBackoffFactory) New() *exponentialBackoff {
-	return newExponentialBackoff(f.opts...)
-}
+// func (f *exponentialBackoffFactory) New() *exponentialBackoff {
+// 	return newExponentialBackoff(f.opts...)
+// }
 
-func (f *exponentialBackoffFactory) Reset(eb *exponentialBackoff) {
-	eb.Reset()
-}
+// func (f *exponentialBackoffFactory) Reset(eb *exponentialBackoff) {
+// 	eb.Reset()
+// }
 
 type retryableFunc func() error
 

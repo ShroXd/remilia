@@ -270,37 +270,37 @@ func WithUserAgentGenerator(fn func() string) clientOptionFunc {
 
 // Configuration functions for exponential backoff
 
-func WithRequestMinimumDelay(d time.Duration) clientOptionFunc {
+func WithMinDelay(d time.Duration) clientOptionFunc {
 	return func(c *Client) error {
-		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMinDelay(d))
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMinDelay(d))
 		return nil
 	}
 }
 
-func WithRequestMaximumDelay(d time.Duration) clientOptionFunc {
+func WithMaxDelay(d time.Duration) clientOptionFunc {
 	return func(c *Client) error {
-		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMaxDelay(d))
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMaxDelay(d))
 		return nil
 	}
 }
 
-func WithRequestMultiplier(m float64) clientOptionFunc {
+func WithMultiplier(m float64) clientOptionFunc {
 	return func(c *Client) error {
-		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMultiplier(m))
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMultiplier(m))
 		return nil
 	}
 }
 
-func WithRequestMaximumAttempt(a uint8) clientOptionFunc {
+func WithMaxAttempt(a uint8) clientOptionFunc {
 	return func(c *Client) error {
-		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithMaxAttempt(a))
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMaxAttempt(a))
 		return nil
 	}
 }
 
-func WithRequestLinearAttempt(a uint8) clientOptionFunc {
+func WithLinearAttempt(a uint8) clientOptionFunc {
 	return func(c *Client) error {
-		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithLinearAttempt(a))
+		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkLinearAttempt(a))
 		return nil
 	}
 }

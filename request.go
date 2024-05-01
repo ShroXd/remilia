@@ -22,7 +22,7 @@ func withMethod(method string) requestOption {
 			req.Method = method
 			return nil
 		} else {
-			return fmt.Errorf("Invalid method: %s", method)
+			return fmt.Errorf("invalid method: %s", method)
 		}
 	}
 }
@@ -71,10 +71,10 @@ func newRequest(opts ...requestOption) (*Request, error) {
 	return req, nil
 }
 
-func emptyRequest() *Request {
-	// TODO: re-use the existing request insteace
-	return &Request{}
-}
+// func emptyRequest() *Request {
+// 	// TODO: re-use the existing request insteace
+// 	return &Request{}
+// }
 
 func (req *Request) build() *fasthttp.Request {
 	fasthttpReq := fasthttp.AcquireRequest()
