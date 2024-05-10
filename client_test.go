@@ -236,13 +236,13 @@ func TestExecute(t *testing.T) {
 
 	t.Run("Successful execution with pre-request hooks", func(t *testing.T) {
 		client, httpClient := setupClient(t, WithPreRequestHooks(func(req *Request) error {
-			req.Method = "GET"
+			req.Method = []byte("GET")
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
 			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 				req := args.Get(0).(*fasthttp.Request)
-				assert.Equal(t, "GET", string(req.Header.Method()))
+				assert.Equal(t, []byte("GET"), req.Header.Method())
 			}).Return(nil)
 		})
 	})
@@ -277,13 +277,13 @@ func TestExecute(t *testing.T) {
 
 	t.Run("Successful execution with internal pre-request hooks", func(t *testing.T) {
 		client, httpClient := setupClient(t, withInternalPreRequestHooks(func(req *Request) error {
-			req.Method = "GET"
+			req.Method = []byte("GET")
 			return nil
 		}))
 		assertExecuteSuccess(t, client, httpClient, func(httpClient *mockInternalClient) {
 			httpClient.On("Do", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 				req := args.Get(0).(*fasthttp.Request)
-				assert.Equal(t, "GET", string(req.Header.Method()))
+				assert.Equal(t, []byte("GET"), req.Header.Method())
 			}).Return(nil)
 		})
 	})

@@ -7,7 +7,7 @@ import (
 )
 
 type Request struct {
-	Method      string
+	Method      []byte
 	URL         string
 	Headers     map[string]string
 	Body        []byte
@@ -19,7 +19,7 @@ type requestOption func(*Request) error
 func withMethod(method string) requestOption {
 	return func(req *Request) error {
 		if method == "GET" || method == "POST" || method == "PUT" || method == "DELETE" {
-			req.Method = method
+			req.Method = append(req.Method[:0], method...)
 			return nil
 		} else {
 			return fmt.Errorf("invalid method: %s", method)
@@ -79,7 +79,7 @@ func newRequest(opts ...requestOption) (*Request, error) {
 func (req *Request) build() *fasthttp.Request {
 	fasthttpReq := fasthttp.AcquireRequest()
 
-	fasthttpReq.Header.SetMethod(req.Method)
+	fasthttpReq.Header.SetMethodBytes(req.Method)
 	fasthttpReq.SetRequestURI(req.URL)
 
 	for k, v := range req.Headers {

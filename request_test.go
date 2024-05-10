@@ -14,7 +14,7 @@ func TestRequestOptions(t *testing.T) {
 			err := withMethod(method)(req)
 
 			assert.NoError(t, err, "WithMethod should not return error")
-			assert.Equal(t, method, req.Method, "Method should be %s", method)
+			assert.Equal(t, []byte(method), req.Method, "Method should be %s", method)
 		}
 
 		invalidMethod := "INVALID"
@@ -68,7 +68,7 @@ func TestRequestOptions(t *testing.T) {
 func TestNewRequest(t *testing.T) {
 	req, err := newRequest(withMethod("GET"), withURL("http://example.com"), withHeader("Content-Type", "application/json"), withBody([]byte(`{"foo":"bar"}`)), withQueryParam("param1", "value1"))
 	assert.NoError(t, err, "NewRequest should not return error")
-	assert.Equal(t, "GET", req.Method, "Method should be GET")
+	assert.Equal(t, []byte("GET"), req.Method, "Method should be GET")
 	assert.Equal(t, "http://example.com", req.URL, "URL should be http://example.com")
 	assert.Equal(t, "application/json", req.Headers["Content-Type"], "Header should be application/json")
 
