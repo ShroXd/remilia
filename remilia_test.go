@@ -80,7 +80,7 @@ func TestJustWrappedFunc(t *testing.T) {
 	assert.NoError(t, err, "justFunc should not return an error")
 
 	assert.Len(t, requests, 1, "justFunc should only put 1 request")
-	assert.Equal(t, urlStr, requests[0].URL, "justFunc should put the correct request")
+	assert.Equal(t, []byte(urlStr), requests[0].URL, "justFunc should put the correct request")
 }
 
 type mockHTTPClient struct {

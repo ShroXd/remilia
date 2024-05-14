@@ -261,7 +261,7 @@ func WithTimeout(timeout time.Duration) clientOptionFunc {
 func WithUserAgentGenerator(fn func() string) clientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers["User-Agent"] = fn()
+			r.Headers.Add("User-Agent", fn())
 			return nil
 		})
 		return nil
@@ -309,7 +309,7 @@ func WithBasicAuth(username string, password string) clientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
 			auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-			r.Headers["Authorization"] = "Basic " + auth
+			r.Headers.Add("Authorization", "Basic "+auth)
 			return nil
 		})
 		return nil
@@ -319,7 +319,7 @@ func WithBasicAuth(username string, password string) clientOptionFunc {
 func WithBearerAuth(token string) clientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers["Authorization"] = "Bearer " + token
+			r.Headers.Add("Authorization", "Bearer "+token)
 			return nil
 		})
 		return nil
@@ -329,7 +329,7 @@ func WithBearerAuth(token string) clientOptionFunc {
 func WithApiKeyAuth(apiKey string) clientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers["apikey"] = apiKey
+			r.Headers.Add("apiKey", apiKey)
 			return nil
 		})
 		return nil
@@ -339,7 +339,7 @@ func WithApiKeyAuth(apiKey string) clientOptionFunc {
 func WithCookie(cookie string) clientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers["Cookie"] = cookie
+			r.Headers.Add("Cookie", cookie)
 			return nil
 		})
 		return nil

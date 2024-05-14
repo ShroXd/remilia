@@ -8,10 +8,10 @@ import (
 
 type Request struct {
 	Method      []byte
-	URL         string
-	Headers     map[string]string
+	URL         []byte
+	Headers     *fasthttp.Args
 	Body        []byte
-	QueryParams map[string]string
+	QueryParams *fasthttp.Args
 }
 
 type requestOption func(*Request) error
@@ -29,14 +29,14 @@ func withMethod(method string) requestOption {
 
 func withURL(url string) requestOption {
 	return func(req *Request) error {
-		req.URL = url
+		req.URL = append(req.URL[:0], url...)
 		return nil
 	}
 }
 
 func withHeader(key, value string) requestOption {
 	return func(req *Request) error {
-		req.Headers[key] = value
+		req.Headers.Add(key, value)
 		return nil
 	}
 }
@@ -50,15 +50,15 @@ func withBody(body []byte) requestOption {
 
 func withQueryParam(key, value string) requestOption {
 	return func(req *Request) error {
-		req.QueryParams[key] = value
+		req.QueryParams.Add(key, value)
 		return nil
 	}
 }
 
 func newRequest(opts ...requestOption) (*Request, error) {
 	req := &Request{
-		Headers:     make(map[string]string),
-		QueryParams: make(map[string]string),
+		Headers:     fasthttp.AcquireArgs(),
+		QueryParams: fasthttp.AcquireArgs(),
 	}
 
 	for _, opt := range opts {
@@ -80,18 +80,18 @@ func (req *Request) build() *fasthttp.Request {
 	fasthttpReq := fasthttp.AcquireRequest()
 
 	fasthttpReq.Header.SetMethodBytes(req.Method)
-	fasthttpReq.SetRequestURI(req.URL)
+	fasthttpReq.SetRequestURIBytes(req.URL)
 
-	for k, v := range req.Headers {
-		fasthttpReq.Header.Set(k, v)
-	}
+	req.Headers.VisitAll(func(key, value []byte) {
+		fasthttpReq.Header.SetBytesKV(key, value)
+	})
 
 	fasthttpReq.BodyWriter().Write(req.Body)
 
 	args := fasthttpReq.URI().QueryArgs()
-	for k, v := range req.QueryParams {
-		args.Add(k, v)
-	}
+	req.QueryParams.VisitAll(func(key, value []byte) {
+		args.AddBytesKV(key, value)
+	})
 
 	return fasthttpReq
 }

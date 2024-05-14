@@ -127,7 +127,10 @@ func assertExecuteSuccess(t *testing.T, client *Client, httpClient *mockInternal
 		setupMock(httpClient)
 	}
 
-	request := &Request{}
+	request := &Request{
+		Headers:     fasthttp.AcquireArgs(),
+		QueryParams: fasthttp.AcquireArgs(),
+	}
 	response, err := client.execute(request)
 
 	assert.NoError(t, err)
@@ -141,7 +144,10 @@ func assertExecuteFailure(t *testing.T, client *Client, httpClient *mockInternal
 		setupMock(httpClient)
 	}
 
-	request := &Request{}
+	request := &Request{
+		Headers:     fasthttp.AcquireArgs(),
+		QueryParams: fasthttp.AcquireArgs(),
+	}
 	response, err := client.execute(request)
 
 	assert.Nil(t, response)
@@ -218,7 +224,10 @@ func TestExecute(t *testing.T) {
 
 		httpClient.On("Do", mock.Anything, mock.Anything).Return(nil)
 
-		request := &Request{}
+		request := &Request{
+			Headers:     fasthttp.AcquireArgs(),
+			QueryParams: fasthttp.AcquireArgs(),
+		}
 		response, err := client.execute(request)
 
 		assert.Nil(t, response, "Response should be nil")
