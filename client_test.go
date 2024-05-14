@@ -42,18 +42,16 @@ func TestNewClient(t *testing.T) {
 			withInternalClient(new(mockInternalClient)),
 			withDocumentCreator(&defaultDocumentCreator{}),
 			WithBaseURL("http://example.com"),
-			WithHeaders(map[string]string{
-				"Content-Type": "application/json",
-				"Accept":       "application/xml",
-			}),
+			// WithHeaders(map[string]string{
+			// 	"Content-Type": "application/json",
+			// 	"Accept":       "application/xml",
+			// }),
 			WithTimeout(10*time.Second),
 			withClientLogger(&defaultLogger{}),
 		)
 
 		assert.NoError(t, err, "buildClientOptions should not return error")
 		assert.Equal(t, "http://example.com", client.baseURL, "BaseURL should be http://example.com")
-		assert.Equal(t, "application/json", client.header.Get("Content-Type"), "Content-Type should be application/json")
-		assert.Equal(t, "application/xml", client.header.Get("Accept"), "Accept should be application/xml")
 		assert.Equal(t, 10*time.Second, client.timeout, "Timeout should be 10 seconds")
 		assert.Equal(t, &defaultLogger{}, client.logger, "Logger should be set correctly")
 	})

@@ -3,9 +3,7 @@ package remilia
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"io"
-	"net/http"
 	"sync"
 	"time"
 
@@ -48,8 +46,6 @@ type clientOptionFunc optionFunc[*Client]
 
 type Client struct {
 	baseURL string
-	// TODO: consider if the header is still needed
-	header http.Header
 
 	timeout                 time.Duration
 	logger                  Logger
@@ -73,7 +69,6 @@ func newClient(opts ...clientOptionFunc) (*Client, error) {
 	c := &Client{
 		readerPool: newPool[*bytes.Reader](readerFactory{}),
 	}
-	c.header = http.Header{}
 
 	for _, optFn := range opts {
 		if err := optFn(c); err != nil {
@@ -241,9 +236,12 @@ func WithBaseURL(url string) clientOptionFunc {
 
 func WithHeaders(headers map[string]string) clientOptionFunc {
 	return func(c *Client) error {
-		for h, v := range headers {
-			c.header.Set(h, v)
-		}
+		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
+			for k, v := range headers {
+				r.Headers.Add(k, v)
+			}
+			return nil
+		})
 		return nil
 	}
 }
@@ -301,47 +299,6 @@ func WithMaxAttempt(a uint8) clientOptionFunc {
 func WithLinearAttempt(a uint8) clientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkLinearAttempt(a))
-		return nil
-	}
-}
-
-func WithBasicAuth(username string, password string) clientOptionFunc {
-	return func(c *Client) error {
-		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-			r.Headers.Add("Authorization", "Basic "+auth)
-			return nil
-		})
-		return nil
-	}
-}
-
-func WithBearerAuth(token string) clientOptionFunc {
-	return func(c *Client) error {
-		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers.Add("Authorization", "Bearer "+token)
-			return nil
-		})
-		return nil
-	}
-}
-
-func WithApiKeyAuth(apiKey string) clientOptionFunc {
-	return func(c *Client) error {
-		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers.Add("apiKey", apiKey)
-			return nil
-		})
-		return nil
-	}
-}
-
-func WithCookie(cookie string) clientOptionFunc {
-	return func(c *Client) error {
-		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
-			r.Headers.Add("Cookie", cookie)
-			return nil
-		})
 		return nil
 	}
 }
