@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ShroXd/remilia"
@@ -33,7 +34,15 @@ func main() {
 }
 
 func work() {
-	rem, _ := remilia.New()
+	start := time.Now()
+	fmt.Println("Program start time:", start)
+
+	rem, _ := remilia.New(
+		remilia.WithUnitOptions(
+			remilia.WithConcurrency(60),
+			remilia.WithInputBufferSize(100),
+		),
+	)
 
 	initURL := "http://localhost:6657/page/1"
 	baseURL := "http://localhost:6657"
@@ -59,6 +68,13 @@ func work() {
 	if err := rem.Do(producer, first, second); err != nil {
 		fmt.Println("Error: ", err)
 	}
+
+	end := time.Now()
+	fmt.Println("Program end time:", end)
+
+	// Calculate total execution time
+	duration := end.Sub(start)
+	fmt.Println("Total execution time:", duration)
 }
 
 func startCPUProfile() {
