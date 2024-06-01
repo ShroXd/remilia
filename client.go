@@ -42,7 +42,7 @@ type (
 )
 
 // TODO: is this a good preactice to mixin otps for network request and custom functionality?
-type clientOptionFunc optionFunc[*Client]
+type ClientOptionFunc optionFunc[*Client]
 
 type Client struct {
 	baseURL string
@@ -65,7 +65,7 @@ type Client struct {
 	exponentialBackoffOptionFuncs []exponentialBackoffOptionFunc
 }
 
-func newClient(opts ...clientOptionFunc) (*Client, error) {
+func newClient(opts ...ClientOptionFunc) (*Client, error) {
 	c := &Client{
 		readerPool: newPool[*bytes.Reader](readerFactory{}),
 	}
@@ -158,56 +158,56 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	return response, nil
 }
 
-func withClientLogger(logger Logger) clientOptionFunc {
+func withClientLogger(logger Logger) ClientOptionFunc {
 	return func(c *Client) error {
 		c.logger = logger
 		return nil
 	}
 }
 
-func withInternalPreRequestHooks(hooks ...RequestHook) clientOptionFunc {
+func withInternalPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, hooks...)
 		return nil
 	}
 }
 
-func withInternalPostResponseHooks(hooks ...ResponseHook) clientOptionFunc {
+func withInternalPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
 	return func(c *Client) error {
 		c.postResponseHooks = append(c.postResponseHooks, hooks...)
 		return nil
 	}
 }
 
-func withInternalClient(client internalClient) clientOptionFunc {
+func withInternalClient(client internalClient) ClientOptionFunc {
 	return func(c *Client) error {
 		c.internal = client
 		return nil
 	}
 }
 
-func withDocumentCreator(creator documentCreator) clientOptionFunc {
+func withDocumentCreator(creator documentCreator) ClientOptionFunc {
 	return func(c *Client) error {
 		c.docCreator = creator
 		return nil
 	}
 }
 
-func withReaderPool(readerPool *abstractPool[*bytes.Reader]) clientOptionFunc {
+func withReaderPool(readerPool *abstractPool[*bytes.Reader]) ClientOptionFunc {
 	return func(c *Client) error {
 		c.readerPool = readerPool
 		return nil
 	}
 }
 
-func WithTransformer(transformer transform.Transformer) clientOptionFunc {
+func WithTransformer(transformer transform.Transformer) ClientOptionFunc {
 	return func(c *Client) error {
 		c.transformer = transformer
 		return nil
 	}
 }
 
-func WithPreRequestHooks(hooks ...RequestHook) clientOptionFunc {
+func WithPreRequestHooks(hooks ...RequestHook) ClientOptionFunc {
 	return func(c *Client) error {
 		c.udPreRequestHooksLock.Lock()
 		defer c.udPreRequestHooksLock.Unlock()
@@ -217,7 +217,7 @@ func WithPreRequestHooks(hooks ...RequestHook) clientOptionFunc {
 	}
 }
 
-func WithPostResponseHooks(hooks ...ResponseHook) clientOptionFunc {
+func WithPostResponseHooks(hooks ...ResponseHook) ClientOptionFunc {
 	return func(c *Client) error {
 		c.udPostResponseHooksLock.Lock()
 		defer c.udPostResponseHooksLock.Unlock()
@@ -227,14 +227,14 @@ func WithPostResponseHooks(hooks ...ResponseHook) clientOptionFunc {
 	}
 }
 
-func WithBaseURL(url string) clientOptionFunc {
+func WithBaseURL(url string) ClientOptionFunc {
 	return func(c *Client) error {
 		c.baseURL = url
 		return nil
 	}
 }
 
-func WithHeaders(headers map[string]string) clientOptionFunc {
+func WithHeaders(headers map[string]string) ClientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
 			for k, v := range headers {
@@ -246,7 +246,7 @@ func WithHeaders(headers map[string]string) clientOptionFunc {
 	}
 }
 
-func WithTimeout(timeout time.Duration) clientOptionFunc {
+func WithTimeout(timeout time.Duration) ClientOptionFunc {
 	return func(c *Client) error {
 		if timeout < 0 {
 			return errInvalidTimeout
@@ -256,7 +256,7 @@ func WithTimeout(timeout time.Duration) clientOptionFunc {
 	}
 }
 
-func WithUserAgentGenerator(fn func() string) clientOptionFunc {
+func WithUserAgentGenerator(fn func() string) ClientOptionFunc {
 	return func(c *Client) error {
 		c.preRequestHooks = append(c.preRequestHooks, func(r *Request) error {
 			r.Headers.Add("User-Agent", fn())
@@ -268,35 +268,35 @@ func WithUserAgentGenerator(fn func() string) clientOptionFunc {
 
 // Configuration functions for exponential backoff
 
-func WithMinDelay(d time.Duration) clientOptionFunc {
+func WithMinDelay(d time.Duration) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMinDelay(d))
 		return nil
 	}
 }
 
-func WithMaxDelay(d time.Duration) clientOptionFunc {
+func WithMaxDelay(d time.Duration) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMaxDelay(d))
 		return nil
 	}
 }
 
-func WithMultiplier(m float64) clientOptionFunc {
+func WithMultiplier(m float64) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMultiplier(m))
 		return nil
 	}
 }
 
-func WithMaxAttempt(a uint8) clientOptionFunc {
+func WithMaxAttempt(a uint8) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkMaxAttempt(a))
 		return nil
 	}
 }
 
-func WithLinearAttempt(a uint8) clientOptionFunc {
+func WithLinearAttempt(a uint8) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkLinearAttempt(a))
 		return nil

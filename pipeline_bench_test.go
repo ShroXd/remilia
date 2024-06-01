@@ -129,7 +129,7 @@ func BenchmarkProcessorExecution(b *testing.B) {
 				put(item * 2)
 				return nil
 			}
-			opts := []commonStageOptionFunc{
+			opts := []StageOptionFunc{
 				WithConcurrency(uint(tc.concurrency)),
 				WithInputBufferSize(uint(tc.bufferSize)),
 			}

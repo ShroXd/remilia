@@ -33,13 +33,13 @@ type Remilia struct {
 	ID   string
 	Name string
 
-	client       httpClient
-	logger       Logger
-	urlMatcher   func(s string) bool
-	stageOptions []commonStageOptionFunc
+	client             httpClient
+	logger             Logger
+	urlMatcher         func(s string) bool
+	globalStageOptions []StageOptionFunc
 }
 
-func New(opts ...remiliaOption) (*Remilia, error) {
+func New(opts ...RemiliaOptionFunc) (*Remilia, error) {
 	r := &Remilia{}
 
 	if r.logger == nil {
@@ -166,8 +166,8 @@ func (r *Remilia) URLProvider(urlStr string) providerDef[*Request] {
 
 type LayerFunc func(in *goquery.Document, put Put[string])
 
-func (r *Remilia) AddLayer(fn LayerFunc, opts ...commonStageOptionFunc) actionLayerDef[*Request] {
-	combinedOpts := append(r.stageOptions, opts...)
+func (r *Remilia) AddLayer(fn LayerFunc, opts ...StageOptionFunc) actionLayerDef[*Request] {
+	combinedOpts := append(r.globalStageOptions, opts...)
 
 	return newActionLayer[*Request](r.wrapLayerFunc(fn), combinedOpts...)
 }
@@ -191,9 +191,9 @@ func newFastHTTPClient() *fasthttp.Client {
 	}
 }
 
-type remiliaOption func(*Remilia)
+type RemiliaOptionFunc func(*Remilia)
 
-func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
+func WithClientOptions(opts ...ClientOptionFunc) RemiliaOptionFunc {
 	return func(r *Remilia) {
 		client, err := newClient(
 			withInternalClient(newFastHTTPClient()),
@@ -214,13 +214,13 @@ func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
 	}
 }
 
-func WithLayerOptions(opts ...commonStageOptionFunc) remiliaOption {
+func WithLayerOptions(opts ...StageOptionFunc) RemiliaOptionFunc {
 	return func(r *Remilia) {
-		r.stageOptions = opts
+		r.globalStageOptions = opts
 	}
 }
 
-func WithLogger(logger Logger) remiliaOption {
+func WithLogger(logger Logger) RemiliaOptionFunc {
 	return func(r *Remilia) {
 		r.logger = logger
 	}

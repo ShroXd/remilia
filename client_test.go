@@ -112,7 +112,7 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func setupClient(t *testing.T, hooks ...clientOptionFunc) (*Client, *mockInternalClient) {
+func setupClient(t *testing.T, hooks ...ClientOptionFunc) (*Client, *mockInternalClient) {
 	httpClient := new(mockInternalClient)
 	opts := append(hooks, withInternalClient(httpClient), withDocumentCreator(&defaultDocumentCreator{}))
 	client, err := newClient(opts...)

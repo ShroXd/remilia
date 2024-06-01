@@ -85,16 +85,16 @@ func execute(eg *errgroup.Group, executor executor) {
 // 2. stage network request fn
 
 // TODO: utilize the interface to reduce the code duplication
-type commonStageOptions struct {
+type stageOptions struct {
 	name            string
 	concurrency     uint
 	inputBufferSize uint
 }
 
-type commonStageOptionFunc optionFunc[*commonStageOptions]
+type StageOptionFunc optionFunc[*stageOptions]
 
-func buildCommonStageOptions(optFns []commonStageOptionFunc) (*commonStageOptions, error) {
-	cso := &commonStageOptions{
+func buildCommonStageOptions(optFns []StageOptionFunc) (*stageOptions, error) {
+	cso := &stageOptions{
 		concurrency: uint(1),
 	}
 	for _, optFn := range optFns {
@@ -105,15 +105,15 @@ func buildCommonStageOptions(optFns []commonStageOptionFunc) (*commonStageOption
 	return cso, nil
 }
 
-func withName(name string) commonStageOptionFunc {
-	return func(cso *commonStageOptions) error {
+func withName(name string) StageOptionFunc {
+	return func(cso *stageOptions) error {
 		cso.name = name
 		return nil
 	}
 }
 
-func WithConcurrency(concurrency uint) commonStageOptionFunc {
-	return func(cso *commonStageOptions) error {
+func WithConcurrency(concurrency uint) StageOptionFunc {
+	return func(cso *stageOptions) error {
 		if concurrency == 0 {
 			return errInvalidConcurrency
 		}
@@ -122,8 +122,8 @@ func WithConcurrency(concurrency uint) commonStageOptionFunc {
 	}
 }
 
-func WithInputBufferSize(size uint) commonStageOptionFunc {
-	return func(cso *commonStageOptions) error {
+func WithInputBufferSize(size uint) StageOptionFunc {
+	return func(cso *stageOptions) error {
 		if size == 0 {
 			return errInvalidInputBufferSize
 		}
@@ -133,7 +133,7 @@ func WithInputBufferSize(size uint) commonStageOptionFunc {
 }
 
 type commonStage[T any] struct {
-	opts        *commonStageOptions
+	opts        *stageOptions
 	emitToOutCh bool
 	inCh        chan T
 	outCh       chan<- T
@@ -177,7 +177,7 @@ type provider[T any] struct {
 	getter func() (T, bool)
 }
 
-func buildProvider[T any](fn workFn[T], opts *commonStageOptions) *provider[T] {
+func buildProvider[T any](fn workFn[T], opts *stageOptions) *provider[T] {
 	p := &provider[T]{
 		commonStage: commonStage[T]{
 			opts:        opts,
@@ -200,7 +200,7 @@ func buildProvider[T any](fn workFn[T], opts *commonStageOptions) *provider[T] {
 	return p
 }
 
-func newProvider[T any](fn workFn[T], optFns ...commonStageOptionFunc) providerDef[T] {
+func newProvider[T any](fn workFn[T], optFns ...StageOptionFunc) providerDef[T] {
 	return func() (*provider[T], error) {
 		opts, err := buildCommonStageOptions(optFns)
 		if err != nil {
@@ -224,62 +224,6 @@ func (p *provider[T]) execute() error {
 	return p.fn(p.getter, put, chew)
 }
 
-type flowFn[T any] func(in T) (out T, err error)
-type flowDef[T any] func() (*flow[T], error)
-
-type flow[T any] struct {
-	commonStage[T]
-	fn flowFn[T]
-}
-
-func buildFlow[T any](fn flowFn[T], opts *commonStageOptions) *flow[T] {
-	return &flow[T]{
-		commonStage: commonStage[T]{
-			opts:        opts,
-			emitToOutCh: true,
-			inCh:        make(chan T, opts.inputBufferSize),
-		},
-		fn: fn,
-	}
-}
-
-func newFlow[T any](fn flowFn[T], optFns ...commonStageOptionFunc) flowDef[T] {
-	return func() (*flow[T], error) {
-		opts, err := buildCommonStageOptions(optFns)
-		if err != nil {
-			return nil, err
-		}
-
-		return buildFlow[T](fn, opts), nil
-	}
-}
-
-func (s *flow[T]) executeOnce() (ok bool, err error) {
-	var in, out T
-	in, ok = <-s.inCh
-	if !ok {
-		return false, nil
-	}
-	out, err = s.fn(in)
-	if err != nil {
-		return false, err
-	}
-
-	if err == nil && s.emitToOutCh {
-		s.outCh <- out
-	}
-	return ok, err
-}
-
-func (s *flow[T]) execute() error {
-	ok, err := s.executeOnce()
-	for ok && err == nil {
-		ok, err = s.executeOnce()
-	}
-
-	return err
-}
-
 type actionLayerFunc[T any] func(get Get[T], put Put[T], inCh chan T) error
 type actionLayerDef[T any] func() (*actionLayer[T], error)
 
@@ -290,7 +234,7 @@ type actionLayer[T any] struct {
 	get func() (T, bool)
 }
 
-func newActionLayer[T any](fn actionLayerFunc[T], optFns ...commonStageOptionFunc) actionLayerDef[T] {
+func newActionLayer[T any](fn actionLayerFunc[T], optFns ...StageOptionFunc) actionLayerDef[T] {
 	return func() (*actionLayer[T], error) {
 		opts, err := buildCommonStageOptions(optFns)
 		if err != nil {
