@@ -7,8 +7,8 @@ import (
 )
 
 type pipeline[T any] struct {
-	producer *provider[T]
-	stages   []*actionLayer[T]
+	provider *provider[T]
+	layers   []*actionLayer[T]
 }
 
 func newPipeline[T any](pd providerDef[T], stageDefs ...actionLayerDef[T]) (*pipeline[T], error) {
@@ -16,24 +16,24 @@ func newPipeline[T any](pd providerDef[T], stageDefs ...actionLayerDef[T]) (*pip
 	var err error
 
 	// Build producer
-	p.producer, err = pd()
+	p.provider, err = pd()
 	if err != nil {
 		return nil, err
 	}
 
-	p.stages = make([]*actionLayer[T], len(stageDefs))
+	p.layers = make([]*actionLayer[T], len(stageDefs))
 	for idx, stageDef := range stageDefs {
 		stage, err := stageDef()
 		if err != nil {
 			return nil, err
 		}
-		p.stages[idx] = stage
+		p.layers[idx] = stage
 	}
 
-	lastStage := p.stages[0]
-	p.producer.outCh = lastStage.inCh
+	lastStage := p.layers[0]
+	p.provider.outCh = lastStage.inCh
 
-	for _, stage := range p.stages[1:] {
+	for _, stage := range p.layers[1:] {
 		lastStage.outCh = stage.inCh
 		lastStage = stage
 	}
@@ -42,7 +42,7 @@ func newPipeline[T any](pd providerDef[T], stageDefs ...actionLayerDef[T]) (*pip
 	// the stage accept multiple values from producer and use FanOut to next producer
 
 	// TODO: support recycling pipeline
-	lastStage.outCh = p.producer.inCh
+	lastStage.outCh = p.provider.inCh
 	lastStage.emitToOutCh = false
 
 	return p, nil
@@ -52,8 +52,8 @@ func (p *pipeline[T]) execute() error {
 	var eg errgroup.Group
 
 	// TODO: currently it's only horizontal concurrency, we need to support vertical to improve the
-	execute(&eg, p.producer)
-	for _, stage := range p.stages {
+	execute(&eg, p.provider)
+	for _, stage := range p.layers {
 		execute(&eg, stage)
 	}
 
@@ -84,6 +84,7 @@ func execute(eg *errgroup.Group, executor executor) {
 // 1. recyling put
 // 2. stage network request fn
 
+// TODO: utilize the interface to reduce the code duplication
 type commonStageOptions struct {
 	name            string
 	concurrency     uint

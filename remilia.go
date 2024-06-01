@@ -165,10 +165,10 @@ func (r *Remilia) URLProvider(urlStr string) providerDef[*Request] {
 }
 
 type LayerFunc func(in *goquery.Document, put Put[string])
-type layerOptionFunc = commonStageOptionFunc
 
-func (r *Remilia) AddLayer(fn LayerFunc, opts ...layerOptionFunc) actionLayerDef[*Request] {
+func (r *Remilia) AddLayer(fn LayerFunc, opts ...commonStageOptionFunc) actionLayerDef[*Request] {
 	combinedOpts := append(r.stageOptions, opts...)
+
 	return newActionLayer[*Request](r.wrapLayerFunc(fn), combinedOpts...)
 }
 
@@ -214,7 +214,7 @@ func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
 	}
 }
 
-func WithLayerOptions(opts ...layerOptionFunc) remiliaOption {
+func WithLayerOptions(opts ...commonStageOptionFunc) remiliaOption {
 	return func(r *Remilia) {
 		r.stageOptions = opts
 	}
