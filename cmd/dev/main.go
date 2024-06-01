@@ -38,7 +38,7 @@ func work() {
 	fmt.Println("Program start time:", start)
 
 	rem, _ := remilia.New(
-		remilia.WithUnitOptions(
+		remilia.WithLayerOptions(
 			remilia.WithConcurrency(60),
 			remilia.WithInputBufferSize(100),
 		),
@@ -61,9 +61,9 @@ func work() {
 		fmt.Println("Article title: ", title)
 	}
 
-	producer := rem.Just(initURL)
-	first := rem.Unit(firstParser)
-	second := rem.Unit(secondParser)
+	producer := rem.URLProvider(initURL)
+	first := rem.AddLayer(firstParser)
+	second := rem.AddLayer(secondParser)
 
 	if err := rem.Do(producer, first, second); err != nil {
 		fmt.Println("Error: ", err)

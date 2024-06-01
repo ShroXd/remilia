@@ -82,7 +82,7 @@ func New(opts ...remiliaOption) (*Remilia, error) {
 
 func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
 	return func(get Get[*Request], put Put[*Request], chew Put[*Request]) error {
-		// TODO: we should put the response
+		// TODO: maybe we should put the response
 		req, err := newRequest(withURL(urlStr))
 		if err != nil {
 			return err
@@ -92,56 +92,64 @@ func (r *Remilia) justWrappedFunc(urlStr string) func(get Get[*Request], put Put
 	}
 }
 
-func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])) stageFunc[*Request] {
-	return func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
-		wrappedPut := func(in string) {
-			if !r.urlMatcher(in) {
-				r.logger.Error("Failed to match url", logContext{
-					"url": in,
-				})
-				return
-			}
-
-			req, err := newRequest(withURL(in))
-			if err != nil {
-				r.logger.Error("Failed to create request", logContext{
-					"err": err,
-				})
-				return
-			}
-
-			put(req)
+func (r *Remilia) createWrappedPut(put Put[*Request]) Put[string] {
+	return func(in string) {
+		if !r.urlMatcher(in) {
+			r.logger.Error("Failed to match url", logContext{
+				"url": in,
+			})
+			return
 		}
 
-		worker := func(done <-chan struct{}, requests <-chan *Request) <-chan *Response {
-			responses := make(chan *Response)
-			go func() {
-				defer close(responses)
-				for req := range requests {
-					select {
-					case <-done:
-						return
-					default:
-						resp, err := r.client.execute(req)
-						if err != nil {
-							continue
-						}
-						responses <- resp
-					}
+		req, err := newRequest(withURL(in))
+		if err != nil {
+			r.logger.Error("Failed to create request", logContext{
+				"err": err,
+			})
+			return
+		}
+
+		put(req)
+	}
+}
+
+func (r *Remilia) worker(done <-chan struct{}, requests <-chan *Request) <-chan *Response {
+	responses := make(chan *Response)
+	go func() {
+		defer close(responses)
+		for req := range requests {
+			select {
+			case <-done:
+				return
+			default:
+				resp, err := r.client.execute(req)
+				if err != nil {
+					continue
 				}
-			}()
-			return responses
+				responses <- resp
+			}
 		}
+	}()
+	return responses
+}
+
+func (r *Remilia) createWorkers(done <-chan struct{}, requests <-chan *Request, numWorkers int) []<-chan *Response {
+	workers := make([]<-chan *Response, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		workers[i] = r.worker(done, requests)
+	}
+
+	return workers
+}
+
+func (r *Remilia) wrapLayerFunc(fn func(in *goquery.Document, put Put[string])) stageFunc[*Request] {
+	return func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
+		wrappedPut := r.createWrappedPut(put)
 
 		done := make(chan struct{})
 		defer close(done)
 
-		var workers []<-chan *Response
-
-		for i := 0; i < 1; i++ {
-			workers = append(workers, worker(done, inCh))
-		}
-
+		workers := r.createWorkers(done, inCh, 1)
 		mergedResponses := fanIn(done, workers...)
 
 		for resp := range mergedResponses {
@@ -152,17 +160,16 @@ func (r *Remilia) unitWrappedFunc(fn func(in *goquery.Document, put Put[string])
 	}
 }
 
-func (r *Remilia) Just(urlStr string) processorDef[*Request] {
+func (r *Remilia) URLProvider(urlStr string) processorDef[*Request] {
 	return newProcessor[*Request](r.justWrappedFunc(urlStr))
 }
 
-type UnitFunc func(in *goquery.Document, put Put[string])
+type LayerFunc func(in *goquery.Document, put Put[string])
+type layerOptionFunc = stageOptionFunc
 
-type unitOptionFunc = stageOptionFunc
-
-func (r *Remilia) Unit(fn UnitFunc, opts ...unitOptionFunc) stageDef[*Request] {
+func (r *Remilia) AddLayer(fn LayerFunc, opts ...layerOptionFunc) stageDef[*Request] {
 	combinedOpts := append(r.stageOptions, opts...)
-	return newStage[*Request](r.unitWrappedFunc(fn), combinedOpts...)
+	return newStage[*Request](r.wrapLayerFunc(fn), combinedOpts...)
 }
 
 func (r *Remilia) Do(producerDef processorDef[*Request], stageDefs ...stageDef[*Request]) error {
@@ -207,7 +214,7 @@ func WithClientOptions(opts ...clientOptionFunc) remiliaOption {
 	}
 }
 
-func WithUnitOptions(opts ...unitOptionFunc) remiliaOption {
+func WithLayerOptions(opts ...layerOptionFunc) remiliaOption {
 	return func(r *Remilia) {
 		r.stageOptions = opts
 	}
