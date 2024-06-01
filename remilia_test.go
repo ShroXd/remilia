@@ -121,7 +121,7 @@ func TestDo(t *testing.T) {
 		return nil
 	}
 
-	err := instance.Do(newProcessor(processorFunc), newStage(stageFunc))
+	err := instance.Do(newProvider(processorFunc), newActionLayer(stageFunc))
 
 	assert.NoError(t, err, "Do should not return an error")
 }

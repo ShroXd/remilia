@@ -36,7 +36,7 @@ type Remilia struct {
 	client       httpClient
 	logger       Logger
 	urlMatcher   func(s string) bool
-	stageOptions []stageOptionFunc
+	stageOptions []commonStageOptionFunc
 }
 
 func New(opts ...remiliaOption) (*Remilia, error) {
@@ -142,7 +142,7 @@ func (r *Remilia) createWorkers(done <-chan struct{}, requests <-chan *Request, 
 	return workers
 }
 
-func (r *Remilia) wrapLayerFunc(fn func(in *goquery.Document, put Put[string])) stageFunc[*Request] {
+func (r *Remilia) wrapLayerFunc(fn func(in *goquery.Document, put Put[string])) actionLayerFunc[*Request] {
 	return func(get Get[*Request], put Put[*Request], inCh chan *Request) error {
 		wrappedPut := r.createWrappedPut(put)
 
@@ -160,20 +160,20 @@ func (r *Remilia) wrapLayerFunc(fn func(in *goquery.Document, put Put[string])) 
 	}
 }
 
-func (r *Remilia) URLProvider(urlStr string) processorDef[*Request] {
-	return newProcessor[*Request](r.justWrappedFunc(urlStr))
+func (r *Remilia) URLProvider(urlStr string) providerDef[*Request] {
+	return newProvider[*Request](r.justWrappedFunc(urlStr))
 }
 
 type LayerFunc func(in *goquery.Document, put Put[string])
-type layerOptionFunc = stageOptionFunc
+type layerOptionFunc = commonStageOptionFunc
 
-func (r *Remilia) AddLayer(fn LayerFunc, opts ...layerOptionFunc) stageDef[*Request] {
+func (r *Remilia) AddLayer(fn LayerFunc, opts ...layerOptionFunc) actionLayerDef[*Request] {
 	combinedOpts := append(r.stageOptions, opts...)
-	return newStage[*Request](r.wrapLayerFunc(fn), combinedOpts...)
+	return newActionLayer[*Request](r.wrapLayerFunc(fn), combinedOpts...)
 }
 
-func (r *Remilia) Do(producerDef processorDef[*Request], stageDefs ...stageDef[*Request]) error {
-	pipeline, err := newPipeline[*Request](producerDef, stageDefs...)
+func (r *Remilia) Do(pd providerDef[*Request], stageDefs ...actionLayerDef[*Request]) error {
+	pipeline, err := newPipeline[*Request](pd, stageDefs...)
 	if err != nil {
 		return err
 	}
