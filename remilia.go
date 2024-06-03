@@ -114,14 +114,17 @@ func (r *Remilia) createWrappedPut(put Put[*Request]) Put[string] {
 }
 
 func (r *Remilia) worker(done <-chan struct{}, requests <-chan *Request) <-chan *Response {
-	responses := make(chan *Response)
+	responses := make(chan *Response, 100)
 	go func() {
 		defer close(responses)
-		for req := range requests {
+		for {
 			select {
 			case <-done:
 				return
-			default:
+			case req, ok := <-requests:
+				if !ok {
+					return
+				}
 				resp, err := r.client.execute(req)
 				if err != nil {
 					continue
@@ -186,6 +189,7 @@ func newFastHTTPClient() *fasthttp.Client {
 		ReadTimeout:              10 * time.Second,
 		WriteTimeout:             10 * time.Second,
 		NoDefaultUserAgentHeader: true,
+		MaxConnsPerHost:          5120,
 		// TODO: figure out how to set timeout for TCP connection
 		// Dial: fasthttpproxy.FasthttpHTTPDialer("127.0.0.1:8888"),
 	}

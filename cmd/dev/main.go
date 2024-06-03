@@ -40,7 +40,7 @@ func work() {
 	rem, _ := remilia.New(
 		remilia.WithLayerOptions(
 			remilia.WithConcurrency(60),
-			remilia.WithInputBufferSize(100),
+			remilia.WithInputBufferSize(1000),
 		),
 	)
 
@@ -57,8 +57,8 @@ func work() {
 	}
 
 	secondParser := func(in *goquery.Document, put remilia.Put[string]) {
-		title := in.Find("p").First().Text()
-		fmt.Println("Article title: ", title)
+		in.Find("p").First().Text()
+		// fmt.Println("Article title: ", title)
 	}
 
 	producer := rem.URLProvider(initURL)
@@ -101,7 +101,7 @@ func writeMemProfile() {
 func writeBlockProfile() {
 	f, err := createFileWithDir("out/block.pprof")
 	if err != nil {
-		// panic(err)
+		panic(err)
 	}
 	pprof.Lookup("block").WriteTo(f, 0)
 	f.Close()
@@ -110,16 +110,22 @@ func writeBlockProfile() {
 func writeGoroutineProfile() {
 	f, err := createFileWithDir("out/goroutine.pprof")
 	if err != nil {
-		// panic(err)
+		fmt.Println("Failed to create goroutine profile:", err)
+		return
 	}
-	pprof.Lookup("goroutine").WriteTo(f, 0)
-	f.Close()
+	defer f.Close()
+
+	if p := pprof.Lookup("goroutine"); p != nil {
+		p.WriteTo(f, 0)
+	} else {
+		fmt.Println("Failed to lookup goroutine profile")
+	}
 }
 
 func writeThreadcreateProfile() {
 	f, err := createFileWithDir("out/threadcreate.pprof")
 	if err != nil {
-		// panic(err)
+		panic(err)
 	}
 	pprof.Lookup("threadcreate").WriteTo(f, 0)
 	f.Close()
@@ -128,7 +134,7 @@ func writeThreadcreateProfile() {
 func writeMutexProfile() {
 	f, err := createFileWithDir("out/mutex.pprof")
 	if err != nil {
-		// panic(err)
+		panic(err)
 	}
 	pprof.Lookup("mutex").WriteTo(f, 0)
 	f.Close()
