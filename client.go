@@ -36,6 +36,16 @@ func (f readerFactory) Reset(r *bytes.Reader) {
 	r.Reset(nil)
 }
 
+type exponentialBackoffFactory struct{}
+
+func (eb exponentialBackoffFactory) New() *exponentialBackoff {
+	return newExponentialBackoff()
+}
+
+func (eb exponentialBackoffFactory) Reset(e *exponentialBackoff) {
+	e.Reset()
+}
+
 type (
 	RequestHook  func(*Request) error
 	ResponseHook func(*Response) error
@@ -57,9 +67,10 @@ type Client struct {
 	udPostResponseHooksLock sync.RWMutex
 	transformer             transform.Transformer
 
-	internal   internalClient
-	docCreator documentCreator
-	readerPool *abstractPool[*bytes.Reader]
+	internal               internalClient
+	docCreator             documentCreator
+	readerPool             *abstractPool[*bytes.Reader]
+	exponentialBackoffPool *abstractPool[*exponentialBackoff]
 
 	exponentialBackoff            *exponentialBackoff
 	exponentialBackoffOptionFuncs []exponentialBackoffOptionFunc
@@ -67,7 +78,8 @@ type Client struct {
 
 func newClient(opts ...ClientOptionFunc) (*Client, error) {
 	c := &Client{
-		readerPool: newPool[*bytes.Reader](readerFactory{}),
+		readerPool:             newPool[*bytes.Reader](readerFactory{}),
+		exponentialBackoffPool: newPool[*exponentialBackoff](exponentialBackoffFactory{}),
 	}
 
 	for _, optFn := range opts {
@@ -108,7 +120,10 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	op := func() error {
 		return c.internal.Do(req, resp)
 	}
-	err := retry(context.TODO(), op, c.exponentialBackoff)
+	eb := c.exponentialBackoffPool.get()
+	// TODO: retry could only accepts attempt times of eb
+	err := retry(context.TODO(), op, eb)
+	c.exponentialBackoffPool.put(eb)
 
 	if err != nil {
 		c.logger.Error("Failed to execute request", logContext{
