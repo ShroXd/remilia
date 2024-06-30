@@ -26,8 +26,34 @@ func TestRatelimit(t *testing.T) {
 		mockClock := new(mockClock)
 		mockClock.On("Now").Return(time.Unix(0, 0))
 
-		bucket := NewBucket(mockClock, 10, 1, 1, 10)
+		bucket, err := NewBucket(withLimitationClock(mockClock))
 		assert.NotNil(t, bucket, "NewBucket() should return a non-nil bucket")
+		assert.NoError(t, err, "NewBucket() should not return an error")
+
+		assert.Equal(t, defaultCapacity, bucket.capacity, "NewBucket() should set the default capacity")
+		assert.Equal(t, defaultFillInterval, bucket.fillInterval, "NewBucket() should set the default fill interval")
+		assert.Equal(t, defaultFillQuantum, bucket.fillQuantum, "NewBucket() should set the default fill quantum")
+		assert.Equal(t, defaultInitiallyAvailToken, bucket.initAvailToken, "NewBucket() should set the default initially available token")
+	})
+
+	t.Run("Successfully build with custum value", func(t *testing.T) {
+		mockClock := new(mockClock)
+		mockClock.On("Now").Return(time.Unix(0, 0))
+
+		bucket, err := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(100),
+			withLimitationFillQuantum(10),
+			withLimitationFillInterval(10),
+			withLimitationInitiallyAvailToken(100),
+		)
+		assert.NotNil(t, bucket, "NewBucket() should return a non-nil bucket")
+		assert.NoError(t, err, "NewBucket() should not return an error")
+
+		assert.Equal(t, int64(100), bucket.capacity, "NewBucket() should set the custom capacity")
+		assert.Equal(t, int64(10), bucket.fillQuantum, "NewBucket() should set the custom fill quantum")
+		assert.Equal(t, 10*time.Nanosecond, bucket.fillInterval, "NewBucket() should set the custom fill interval")
+		assert.Equal(t, int64(100), bucket.initAvailToken, "NewBucket() should set the custom initially available token")
 	})
 }
 
@@ -39,7 +65,13 @@ func TestRateLimitationViaTake(t *testing.T) {
 		mockClock := new(mockClock)
 		mockClock.On("Now").Return(time.Unix(0, 0))
 
-		bucket := NewBucket(mockClock, 10, 1, 1, 10)
+		bucket, _ := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(10),
+			withLimitationFillQuantum(1),
+			withLimitationFillInterval(1*time.Nanosecond),
+			withLimitationInitiallyAvailToken(10),
+		)
 		duration := bucket.Take(1)
 		assert.Equal(t, 0*time.Nanosecond, duration, "Take() should return 0 nanosecond")
 	})
@@ -51,7 +83,13 @@ func TestRateLimitationViaTake(t *testing.T) {
 		mockClock.On("Now").Return(time.Unix(0, 0)).Once()
 		mockClock.On("Now").Return(time.Unix(0, 1)).Once()
 
-		bucket := NewBucket(mockClock, 10, 1*time.Nanosecond, 1, 10)
+		bucket, _ := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(10),
+			withLimitationFillQuantum(1),
+			withLimitationFillInterval(1*time.Nanosecond),
+			withLimitationInitiallyAvailToken(10),
+		)
 		bucket.Take(10)
 		duration := bucket.Take(2)
 		// After 1ns, there is one token in the bucket, so we need to wait for 1ns
@@ -66,7 +104,13 @@ func TestRateLimitationViaTake(t *testing.T) {
 		mockClock.On("Now").Return(time.Unix(0, 1)).Once()
 		mockClock.On("Now").Return(time.Unix(0, 2)).Once()
 
-		bucket := NewBucket(mockClock, 10, 1*time.Nanosecond, 1, 10)
+		bucket, _ := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(10),
+			withLimitationFillQuantum(1),
+			withLimitationFillInterval(1*time.Nanosecond),
+			withLimitationInitiallyAvailToken(10),
+		)
 		bucket.Take(10)
 		bucket.Take(1)
 		duration := bucket.Take(1)
@@ -81,7 +125,13 @@ func TestRateLimitationViaWrap(t *testing.T) {
 		mockClock.On("Now").Return(time.Unix(0, 0)).Once()
 		mockClock.On("Now").Return(time.Unix(0, 0)).Once()
 
-		bucket := NewBucket(mockClock, 10, 1, 1, 10)
+		bucket, _ := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(10),
+			withLimitationFillQuantum(1),
+			withLimitationFillInterval(1*time.Nanosecond),
+			withLimitationInitiallyAvailToken(10),
+		)
 		executableFunc := bucket.Wrap(func() error {
 			return nil
 		})
@@ -96,7 +146,13 @@ func TestRateLimitationViaWrap(t *testing.T) {
 		mockClock.On("Now").Return(time.Unix(0, 0)).Once()
 		mockClock.On("Now").Return(time.Unix(0, 1)).Once()
 
-		bucket := NewBucket(mockClock, 1, 1*time.Nanosecond, 1, 10)
+		bucket, _ := NewBucket(
+			withLimitationClock(mockClock),
+			withLimitationCapacity(10),
+			withLimitationFillQuantum(1),
+			withLimitationFillInterval(1*time.Nanosecond),
+			withLimitationInitiallyAvailToken(10),
+		)
 		executableFunc := bucket.Wrap(func() error {
 			return nil
 		})

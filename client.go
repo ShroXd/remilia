@@ -3,6 +3,7 @@ package remilia
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -75,15 +76,17 @@ type Client struct {
 	exponentialBackoff            *exponentialBackoff
 	exponentialBackoffOptionFuncs []exponentialBackoffOptionFunc
 
-	limitation *Bucket
+	rateLimitation            *RateLimitation
+	rateLimitationOptionFuncs []RateLimitionOptionFunc
 }
 
 func newClient(opts ...ClientOptionFunc) (*Client, error) {
+	rateLimitation, _ := NewBucket()
+
 	c := &Client{
 		readerPool:             newPool[*bytes.Reader](readerFactory{}),
 		exponentialBackoffPool: newPool[*exponentialBackoff](exponentialBackoffFactory{}),
-		// TODO: use func options to build it
-		limitation: NewBucket(realClock{}, 10, 5*time.Second, 1, 10),
+		rateLimitation:         rateLimitation,
 	}
 
 	for _, optFn := range opts {
@@ -125,7 +128,7 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	// TODO: retry could only accepts attempt times of eb
 	err := retry(
 		context.TODO(),
-		c.limitation.Wrap(func() error {
+		c.rateLimitation.Wrap(func() error {
 			return c.internal.Do(req, resp)
 		}),
 		eb,
@@ -321,6 +324,64 @@ func WithMaxAttempt(a uint8) ClientOptionFunc {
 func WithLinearAttempt(a uint8) ClientOptionFunc {
 	return func(c *Client) error {
 		c.exponentialBackoffOptionFuncs = append(c.exponentialBackoffOptionFuncs, WithWorkLinearAttempt(a))
+		return nil
+	}
+}
+
+var (
+	errInvalidCapacity       = errors.New("invalid capacity")
+	errInvalidFillInterval   = errors.New("invalid fill interval")
+	errInvalidFillQuantum    = errors.New("invalid fill quantum")
+	errInvalidInitAvailToken = errors.New("invalid initially available token")
+)
+
+func WithClock(clock Clock) ClientOptionFunc {
+	return func(c *Client) error {
+		c.rateLimitationOptionFuncs = append(c.rateLimitationOptionFuncs, withLimitationClock(clock))
+		return nil
+	}
+}
+
+func WithCapacity(capacity int64) ClientOptionFunc {
+	return func(c *Client) error {
+		if capacity < 0 {
+			return errInvalidCapacity
+		}
+
+		c.rateLimitationOptionFuncs = append(c.rateLimitationOptionFuncs, withLimitationCapacity(capacity))
+		return nil
+	}
+}
+
+func WithFillInterval(fillInterval time.Duration) ClientOptionFunc {
+	return func(c *Client) error {
+		if fillInterval < 0 {
+			return errInvalidFillInterval
+		}
+
+		c.rateLimitationOptionFuncs = append(c.rateLimitationOptionFuncs, withLimitationFillInterval(fillInterval))
+		return nil
+	}
+}
+
+func WithFillQuantum(fillQuantum int64) ClientOptionFunc {
+	return func(c *Client) error {
+		if fillQuantum < 0 {
+			return errInvalidFillQuantum
+		}
+
+		c.rateLimitationOptionFuncs = append(c.rateLimitationOptionFuncs, withLimitationFillQuantum(fillQuantum))
+		return nil
+	}
+}
+
+func WithInitiallyAvailToken(token int64) ClientOptionFunc {
+	return func(c *Client) error {
+		if token < 0 || token > c.rateLimitation.capacity {
+			return errInvalidInitAvailToken
+		}
+
+		c.rateLimitationOptionFuncs = append(c.rateLimitationOptionFuncs, withLimitationInitiallyAvailToken(token))
 		return nil
 	}
 }

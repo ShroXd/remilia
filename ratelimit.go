@@ -24,35 +24,49 @@ type Limiter interface {
 	Take() (bool, time.Duration)
 }
 
-type Bucket struct {
+var (
+	defaultClock               = realClock{}
+	defaultCapacity            = int64(100)
+	defaultFillInterval        = time.Second
+	defaultFillQuantum         = int64(10)
+	defaultInitiallyAvailToken = int64(100)
+)
+
+type RateLimitation struct {
 	clock Clock
 	mu    sync.Mutex
 
-	capacity        int64
-	fillQuantum     int64
-	availableTokens int64
-	lastestTime     time.Time
-	fillInterval    time.Duration
+	capacity       int64
+	fillQuantum    int64
+	initAvailToken int64
+	lastestTime    time.Time
+	fillInterval   time.Duration
 }
 
-// TODO: fuck these params' type, we should use time instead of fucking int64
-func NewBucket(clock Clock, capacity int64, fillInterval time.Duration, fillQuantum int64, availableTokens int64) *Bucket {
-	// TODO: check params
-
-	bucket := &Bucket{
-		clock:           clock,
-		capacity:        capacity,
-		lastestTime:     clock.Now(),
-		fillInterval:    fillInterval,
-		fillQuantum:     fillQuantum,
-		availableTokens: availableTokens,
+func NewBucket(optFns ...RateLimitionOptionFunc) (*RateLimitation, error) {
+	bucket := &RateLimitation{
+		clock:          defaultClock,
+		capacity:       defaultCapacity,
+		fillInterval:   defaultFillInterval,
+		fillQuantum:    defaultFillQuantum,
+		initAvailToken: defaultInitiallyAvailToken,
 	}
 
-	return bucket
+	for _, optFn := range optFns {
+		if err := optFn(bucket); err != nil {
+			return nil, err
+		}
+	}
+
+	bucket.lastestTime = bucket.clock.Now()
+	if bucket.initAvailToken > bucket.capacity {
+		bucket.initAvailToken = bucket.capacity
+	}
+
+	return bucket, nil
 }
 
-// TODO: use tick instead of time
-func (b *Bucket) Take(count int64) time.Duration {
+func (b *RateLimitation) Take(count int64) time.Duration {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -62,30 +76,67 @@ func (b *Bucket) Take(count int64) time.Duration {
 	newTokens := intervals * b.fillQuantum
 
 	b.lastestTime = now
-	avail := b.availableTokens + newTokens
+	avail := b.initAvailToken + newTokens
 	if avail >= b.capacity {
 		avail = b.capacity
 	}
 
 	avail = avail - count
 	if avail >= 0 {
-		b.availableTokens = avail
+		b.initAvailToken = avail
 		return 0
 	} else {
 		endTime := b.lastestTime.Add(time.Duration(-avail/b.fillQuantum) * (b.fillInterval))
-		b.availableTokens = 0
+		b.initAvailToken = 0
 		b.lastestTime = endTime
 
 		return endTime.Sub(now)
 	}
 }
 
-func (b *Bucket) Wrap(op func() error) ExecutableFunc {
+func (b *RateLimitation) Wrap(op func() error) ExecutableFunc {
 	return func() error {
 		wait := b.Take(1)
 		if wait > 0 {
 			b.clock.Sleep(wait)
 		}
 		return op()
+	}
+}
+
+type RateLimitionOptionFunc func(*RateLimitation) error
+
+func withLimitationClock(clock Clock) RateLimitionOptionFunc {
+	return func(b *RateLimitation) error {
+		b.clock = clock
+		return nil
+	}
+}
+
+func withLimitationCapacity(capacity int64) RateLimitionOptionFunc {
+	return func(b *RateLimitation) error {
+		b.capacity = capacity
+		return nil
+	}
+}
+
+func withLimitationFillInterval(fillInterval time.Duration) RateLimitionOptionFunc {
+	return func(b *RateLimitation) error {
+		b.fillInterval = fillInterval
+		return nil
+	}
+}
+
+func withLimitationFillQuantum(fillQuantum int64) RateLimitionOptionFunc {
+	return func(b *RateLimitation) error {
+		b.fillQuantum = fillQuantum
+		return nil
+	}
+}
+
+func withLimitationInitiallyAvailToken(initiallyAvailToken int64) RateLimitionOptionFunc {
+	return func(b *RateLimitation) error {
+		b.initAvailToken = initiallyAvailToken
+		return nil
 	}
 }
