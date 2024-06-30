@@ -1,7 +1,7 @@
 package remilia
 
 import (
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -26,21 +26,23 @@ type Limiter interface {
 
 type Bucket struct {
 	clock Clock
+	mu    sync.Mutex
 
 	capacity        int64
-	lastestTime     int64
-	fillInterval    int64
 	fillQuantum     int64
 	availableTokens int64
+	lastestTime     time.Time
+	fillInterval    time.Duration
 }
 
-func NewBucket(clock Clock, capacity int64, fillInterval int64, fillQuantum int64, availableTokens int64) *Bucket {
+// TODO: fuck these params' type, we should use time instead of fucking int64
+func NewBucket(clock Clock, capacity int64, fillInterval time.Duration, fillQuantum int64, availableTokens int64) *Bucket {
 	// TODO: check params
 
 	bucket := &Bucket{
 		clock:           clock,
 		capacity:        capacity,
-		lastestTime:     clock.Now().UnixNano(),
+		lastestTime:     clock.Now(),
 		fillInterval:    fillInterval,
 		fillQuantum:     fillQuantum,
 		availableTokens: availableTokens,
@@ -49,27 +51,31 @@ func NewBucket(clock Clock, capacity int64, fillInterval int64, fillQuantum int6
 	return bucket
 }
 
-func (b *Bucket) Take(count int64) (bool, time.Duration) {
-	// TODO: check count
+// TODO: use tick instead of time
+func (b *Bucket) Take(count int64) time.Duration {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	now := b.clock.Now().UnixNano()
-	newTokens := (now - atomic.LoadInt64(&b.lastestTime)) / b.fillInterval * b.fillQuantum
+	now := b.clock.Now()
+	elapsed := now.Sub(b.lastestTime)
+	intervals := int64(elapsed / b.fillInterval)
+	newTokens := intervals * b.fillQuantum
 
-	atomic.StoreInt64(&b.lastestTime, now)
-	atomic.AddInt64(&b.availableTokens, newTokens)
-	if atomic.LoadInt64(&b.availableTokens) >= b.capacity {
-		atomic.StoreInt64(&b.availableTokens, b.capacity)
+	b.lastestTime = now
+	avail := b.availableTokens + newTokens
+	if avail >= b.capacity {
+		avail = b.capacity
 	}
 
-	avail := atomic.LoadInt64(&b.availableTokens) - count
+	avail = avail - count
 	if avail >= 0 {
-		// atomic.StoreInt64(&b.availableTokens, avail)
-		return true, 0
+		b.availableTokens = avail
+		return 0
 	} else {
-		endTime := atomic.LoadInt64(&b.lastestTime) + (-avail/b.fillQuantum)*b.fillInterval
-		atomic.StoreInt64(&b.availableTokens, 0)
-		atomic.StoreInt64(&b.lastestTime, endTime)
+		endTime := b.lastestTime.Add(time.Duration(-avail/b.fillQuantum) * (b.fillInterval))
+		b.availableTokens = 0
+		b.lastestTime = endTime
 
-		return false, time.Duration(endTime-now) * time.Nanosecond
+		return endTime.Sub(now)
 	}
 }
