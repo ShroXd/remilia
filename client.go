@@ -121,15 +121,15 @@ func (c *Client) execute(request *Request) (*Response, error) {
 	// TODO: delay build response
 	resp := fasthttp.AcquireResponse()
 
-	op := func() error {
-		return c.internal.Do(req, resp)
-	}
 	eb := c.exponentialBackoffPool.get()
-	if wait := c.limitation.Take(1); wait > 0 {
-		time.Sleep(wait)
-	}
 	// TODO: retry could only accepts attempt times of eb
-	err := retry(context.TODO(), op, eb)
+	err := retry(
+		context.TODO(),
+		c.limitation.Wrap(func() error {
+			return c.internal.Do(req, resp)
+		}),
+		eb,
+	)
 	c.exponentialBackoffPool.put(eb)
 
 	if err != nil {

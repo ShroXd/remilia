@@ -79,3 +79,13 @@ func (b *Bucket) Take(count int64) time.Duration {
 		return endTime.Sub(now)
 	}
 }
+
+func (b *Bucket) Wrap(op func() error) ExecutableFunc {
+	return func() error {
+		wait := b.Take(1)
+		if wait > 0 {
+			b.clock.Sleep(wait)
+		}
+		return op()
+	}
+}

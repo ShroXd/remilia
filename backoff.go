@@ -168,9 +168,7 @@ func fullJitterBuilder(minDelay time.Duration, capacity time.Duration, multiplie
 // 	eb.Reset()
 // }
 
-type retryableFunc func() error
-
-func retry(ctx context.Context, op retryableFunc, eb backoff) error {
+func retry(ctx context.Context, op ExecutableFunc, eb backoff) error {
 	var lastErr error
 	maxAttempts := eb.GetMaxAttempt()
 
