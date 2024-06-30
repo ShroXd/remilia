@@ -74,12 +74,16 @@ type Client struct {
 
 	exponentialBackoff            *exponentialBackoff
 	exponentialBackoffOptionFuncs []exponentialBackoffOptionFunc
+
+	limitation *Bucket
 }
 
 func newClient(opts ...ClientOptionFunc) (*Client, error) {
 	c := &Client{
 		readerPool:             newPool[*bytes.Reader](readerFactory{}),
 		exponentialBackoffPool: newPool[*exponentialBackoff](exponentialBackoffFactory{}),
+		// TODO: use func options to build it
+		limitation: NewBucket(realClock{}, 10, 5*time.Second, 1, 10),
 	}
 
 	for _, optFn := range opts {
@@ -121,6 +125,9 @@ func (c *Client) execute(request *Request) (*Response, error) {
 		return c.internal.Do(req, resp)
 	}
 	eb := c.exponentialBackoffPool.get()
+	if wait := c.limitation.Take(1); wait > 0 {
+		time.Sleep(wait)
+	}
 	// TODO: retry could only accepts attempt times of eb
 	err := retry(context.TODO(), op, eb)
 	c.exponentialBackoffPool.put(eb)
